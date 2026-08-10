@@ -173,7 +173,7 @@ class BrevoProvider implements OtpDeliveryProvider {
           'Accept': 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: 'Smart Solution CRM', email: 'admin.tendulkar@smartsolutionagency.in' },
+          sender: { name: 'Smart Solution CRM', email: process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || 'smartsolution.agency01@gmail.com' },
           to: [{ email: identifier, name }],
           subject: 'Smart Solution CRM — Login Verification Code',
           htmlContent: `
