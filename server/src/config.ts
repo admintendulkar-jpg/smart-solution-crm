@@ -58,7 +58,7 @@ export const config = {
     range: process.env.SHEET_RANGE ?? 'Leads!A:H',
   },
 
-  otpProvider: (process.env.OTP_PROVIDER ?? 'console') as 'console' | 'twilio' | 'msg91',
+  otpProvider: (process.env.OTP_PROVIDER ?? 'console') as 'console' | 'twilio' | 'msg91' | 'smtp',
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
     authToken: process.env.TWILIO_AUTH_TOKEN ?? '',
@@ -67,5 +67,12 @@ export const config = {
   msg91: {
     authKey: process.env.MSG91_AUTH_KEY ?? '',
     senderId: process.env.MSG91_SENDER_ID ?? '',
+  },
+  smtp: {
+    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
+    port: int(process.env.SMTP_PORT, 465),
+    user: process.env.SMTP_USER ?? process.env.GMAIL_USER ?? '',
+    pass: process.env.SMTP_PASS ?? process.env.GMAIL_APP_PASS ?? '',
+    from: process.env.SMTP_FROM ?? 'Smart Solution CRM <noreply@smartsolutionagency.in>',
   },
 };

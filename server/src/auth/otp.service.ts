@@ -1,3 +1,4 @@
+import nodemailer from 'nodemailer';
 import { config } from '../config';
 import { logger } from '../logger';
 import { sha256, randomOtp } from '../utils/crypto';
@@ -10,7 +11,50 @@ export interface OtpDeliveryProvider {
 
 class ConsoleProvider implements OtpDeliveryProvider {
   async send(identifier: string, identifierType: 'phone' | 'email', otp: string, name: string): Promise<void> {
-    logger.info(`[OTP:console] Fixed dev OTP for ${name} (${identifierType}: ${identifier}): ${otp}`);
+    logger.info(`[OTP:console] OTP for ${name} (${identifierType}: ${identifier}): ${otp}`);
+  }
+}
+
+class SmtpProvider implements OtpDeliveryProvider {
+  async send(identifier: string, identifierType: 'phone' | 'email', otp: string, name: string): Promise<void> {
+    if (identifierType !== 'email') {
+      logger.info(`[OTP:console] OTP for ${name} (${identifier}): ${otp}`);
+      return;
+    }
+    if (!config.smtp.user || !config.smtp.pass) {
+      logger.info(`[OTP:console] Real Email OTP for ${name} (${identifier}): ${otp} (SMTP credentials not configured)`);
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: config.smtp.host,
+      port: config.smtp.port,
+      secure: config.smtp.port === 465,
+      auth: {
+        user: config.smtp.user,
+        pass: config.smtp.pass,
+      },
+    });
+
+    await transporter.sendMail({
+      from: config.smtp.from,
+      to: identifier,
+      subject: 'Smart Solution CRM — Login Verification Code',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333;">
+          <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+            <h2 style="color: #4f46e5; margin-top: 0; text-align: center;">Smart Solution CRM</h2>
+            <p>Hello <strong>${name}</strong>,</p>
+            <p>Your single-use login verification code is:</p>
+            <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1e293b; background: #f1f5f9; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
+              ${otp}
+            </div>
+            <p style="font-size: 13px; color: #64748b; text-align: center;">This code is valid for ${config.otp.validityMin} minutes. Do not share this code with anyone.</p>
+          </div>
+        </div>
+      `,
+    });
+    logger.info(`[OTP:email] Sent OTP to ${identifier}`);
   }
 }
 
@@ -54,13 +98,18 @@ class Msg91Provider implements OtpDeliveryProvider {
 }
 
 function provider(): OtpDeliveryProvider {
+  if (config.smtp.user && config.smtp.pass) {
+    return new SmtpProvider();
+  }
   switch (config.otpProvider) {
+    case 'smtp':
+      return new SmtpProvider();
     case 'twilio':
       return new TwilioProvider();
     case 'msg91':
       return new Msg91Provider();
     default:
-      return new ConsoleProvider();
+      return new SmtpProvider(); // Fallback to SmtpProvider which logs to console if SMTP credentials not configured
   }
 }
 
@@ -82,7 +131,8 @@ function deleteOtpState(identifier: string): void {
 }
 
 function issueOtp(identifier: string, identifierType: 'phone' | 'email', name: string): Promise<void> {
-  const otp = config.otpProvider === 'console' ? '123456' : randomOtp(6);
+  const isRealSmtp = Boolean(config.smtp.user && config.smtp.pass);
+  const otp = isRealSmtp ? randomOtp(6) : '123456';
   const now = new Date();
   run(
     `INSERT INTO otp_requests (identifier, identifier_type, otp_hash, expires_at, last_sent_at)

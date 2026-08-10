@@ -4,15 +4,14 @@ import { run } from './index';
 import { logger } from '../logger';
 
 const USERS = [
-  { name: 'Karthik R', email: 'owner@smartsolution.in', phone: '9000000001', role: 'super_admin', branch: 'Coimbatore' },
-  { name: 'Priya N', email: 'priya.admin@smartsolution.in', phone: '9000000002', role: 'admin', branch: 'Coimbatore' },
-  { name: 'Arun Kumar', email: 'arun.sales@smartsolution.in', phone: '9000000003', role: 'sales', branch: 'Coimbatore' },
-  { name: 'Divya S', email: 'divya.sales@smartsolution.in', phone: '9000000004', role: 'sales', branch: 'Coimbatore' },
-  { name: 'Mohammed Faisal', email: 'faisal.sales@smartsolution.in', phone: '9000000005', role: 'sales', branch: 'Bangalore' },
-  { name: 'Rahul Sharma', email: 'rahul.sales@smartsolution.in', phone: '9000000006', role: 'sales', branch: 'Bangalore' },
-  { name: 'Meena V', email: 'meena.service@smartsolution.in', phone: '9000000007', role: 'service', branch: 'Coimbatore' },
-  { name: 'Deepak P', email: 'deepak.service@smartsolution.in', phone: '9000000008', role: 'service', branch: 'Bangalore' },
-  { name: 'Lakshmi K', email: 'lakshmi.hr@smartsolution.in', phone: '9000000009', role: 'hr', branch: 'Coimbatore' },
+  { name: 'Tendulkar', email: 'admin.tendulkar@smartsolutionagency.in', phone: '7094523321', role: 'super_admin', branch: 'Coimbatore' },
+  { name: 'Siddharthan A', email: 'smartsolution.agency01@gmail.com', phone: '8248011190', role: 'super_admin', branch: 'Coimbatore' },
+  { name: 'Rajesh (GM)', email: 'gmrk@smartsolutionagency.in', phone: '9000000000', role: 'admin', branch: 'Coimbatore' },
+  { name: 'HR & Admin', email: 'hr@smartsolutionagency.in', phone: '7550173452', role: 'hr', branch: 'Coimbatore' },
+  { name: 'Prathima', email: 'prathimatadmoreacademy@gmail.com', phone: '9632215972', role: 'sales', branch: 'Coimbatore' },
+  { name: 'Hari', email: 'harhar9972@gmail.com', phone: '6383331947', role: 'sales', branch: 'Coimbatore' },
+  { name: 'Kishore M', email: 'krishoffcl12@gmail.com', phone: '9952297655', role: 'sales', branch: 'Coimbatore' },
+  { name: 'Service Support', email: 'service@smartsolutionagency.in', phone: '9000000007', role: 'service', branch: 'Coimbatore' },
 ];
 
 const FIRST_NAMES = [

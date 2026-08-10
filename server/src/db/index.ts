@@ -86,4 +86,34 @@ export function initializeSchema(): void {
       throw err;
     }
   }
+
+  ensureRealUsers();
+}
+
+export function ensureRealUsers(): void {
+  const REAL_USERS = [
+    { name: 'Tendulkar', email: 'admin.tendulkar@smartsolutionagency.in', phone: '7094523321', role: 'super_admin', branch: 'Coimbatore' },
+    { name: 'Siddharthan A', email: 'smartsolution.agency01@gmail.com', phone: '8248011190', role: 'super_admin', branch: 'Coimbatore' },
+    { name: 'Rajesh (GM)', email: 'gmrk@smartsolutionagency.in', phone: '9000000000', role: 'admin', branch: 'Coimbatore' },
+    { name: 'HR & Admin', email: 'hr@smartsolutionagency.in', phone: '7550173452', role: 'hr', branch: 'Coimbatore' },
+    { name: 'Prathima', email: 'prathimatadmoreacademy@gmail.com', phone: '9632215972', role: 'sales', branch: 'Coimbatore' },
+    { name: 'Hari', email: 'harhar9972@gmail.com', phone: '6383331947', role: 'sales', branch: 'Coimbatore' },
+    { name: 'Kishore M', email: 'krishoffcl12@gmail.com', phone: '9952297655', role: 'sales', branch: 'Coimbatore' },
+    { name: 'Service Support', email: 'service@smartsolutionagency.in', phone: '9000000007', role: 'service', branch: 'Coimbatore' },
+  ];
+
+  for (const u of REAL_USERS) {
+    const existing = get<{ id: number }>('SELECT id FROM users WHERE email = ? OR phone = ?', [u.email, u.phone]);
+    if (!existing) {
+      run(
+        `INSERT INTO users (name, email, phone, role, branch, active) VALUES (?, ?, ?, ?, ?, 1)`,
+        [u.name, u.email, u.phone, u.role, u.branch]
+      );
+    } else {
+      run(
+        `UPDATE users SET name = ?, email = ?, phone = ?, role = ?, branch = ?, active = 1 WHERE id = ?`,
+        [u.name, u.email, u.phone, u.role, u.branch, existing.id]
+      );
+    }
+  }
 }
