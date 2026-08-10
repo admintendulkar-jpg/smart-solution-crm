@@ -4,7 +4,7 @@
   "private": true,
   "description": "Smart Solution Agency - internal CRM and lead management system",
   "scripts": {
-    "postinstall": "cd server && npm install && cd ../client && npm install",
+    "postinstall": "cd server && npm install --include=dev && cd ../client && npm install --include=dev",
     "build": "cd client && npm run build && cd ../server && npm run build",
     "start": "node server/dist/index.js"
   }
