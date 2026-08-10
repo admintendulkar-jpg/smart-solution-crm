@@ -76,4 +76,5 @@ export const config = {
     from: process.env.SMTP_FROM ?? 'Smart Solution CRM <noreply@smartsolutionagency.in>',
   },
   resendApiKey: process.env.RESEND_API_KEY ?? '',
+  brevoApiKey: process.env.BREVO_API_KEY ?? '',
 };
