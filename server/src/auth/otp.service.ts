@@ -23,7 +23,7 @@ class SmtpProvider implements OtpDeliveryProvider {
       return;
     }
     if (!config.smtp.user || !config.smtp.pass) {
-      throw new AppError('Email service is not configured. Please set RESEND_API_KEY or SMTP credentials in server environment variables.', 500);
+      throw new AppError(500, 'Email service is not configured. Please set RESEND_API_KEY or SMTP credentials in server environment variables.');
     }
 
     try {
@@ -58,7 +58,7 @@ class SmtpProvider implements OtpDeliveryProvider {
       logger.info(`[OTP:email] Sent OTP via SMTP to ${identifier}`);
     } catch (err: any) {
       logger.error(`SMTP email delivery failed: ${err.message}`);
-      throw new AppError(`Failed to send OTP email via SMTP: ${err.message}`, 500);
+      throw new AppError(500, `Failed to send OTP email via SMTP: ${err.message}`);
     }
   }
 }
@@ -70,7 +70,7 @@ class ResendProvider implements OtpDeliveryProvider {
       return;
     }
     if (!config.resendApiKey) {
-      throw new AppError('Resend API key is not configured. Please add RESEND_API_KEY to environment variables.', 500);
+      throw new AppError(500, 'Resend API key is not configured. Please add RESEND_API_KEY to environment variables.');
     }
 
     try {
@@ -103,14 +103,14 @@ class ResendProvider implements OtpDeliveryProvider {
       if (!response.ok) {
         const errText = await response.text();
         logger.error(`Resend API error (${response.status}): ${errText}`);
-        throw new AppError(`Resend Email Error: ${errText}`, 500);
+        throw new AppError(500, `Resend Email Error: ${errText}`);
       }
 
       logger.info(`[OTP:email] Sent OTP via Resend to ${identifier}`);
     } catch (err: any) {
       if (err instanceof AppError) throw err;
       logger.error(`Resend email delivery failed: ${err.message}`);
-      throw new AppError(`Failed to send OTP email: ${err.message}`, 500);
+      throw new AppError(500, `Failed to send OTP email: ${err.message}`);
     }
   }
 }
