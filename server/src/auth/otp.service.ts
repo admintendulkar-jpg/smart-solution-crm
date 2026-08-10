@@ -4,6 +4,7 @@ import { logger } from '../logger';
 import { sha256, randomOtp } from '../utils/crypto';
 import { addMinutes, nowIso, isPast } from '../utils/time';
 import { get, run } from '../db';
+import { AppError } from '../errors';
 
 export interface OtpDeliveryProvider {
   send(identifier: string, identifierType: 'phone' | 'email', otp: string, name: string): Promise<void>;
@@ -18,66 +19,27 @@ class ConsoleProvider implements OtpDeliveryProvider {
 class SmtpProvider implements OtpDeliveryProvider {
   async send(identifier: string, identifierType: 'phone' | 'email', otp: string, name: string): Promise<void> {
     if (identifierType !== 'email') {
-      logger.info(`[OTP:console] OTP for ${name} (${identifier}): ${otp}`);
+      logger.info(`[OTP:console] Phone OTP for ${name} (${identifier}): ${otp}`);
       return;
     }
     if (!config.smtp.user || !config.smtp.pass) {
-      logger.info(`[OTP:console] Real Email OTP for ${name} (${identifier}): ${otp} (SMTP credentials not configured)`);
-      return;
+      throw new AppError('Email service is not configured. Please set RESEND_API_KEY or SMTP credentials in server environment variables.', 500);
     }
 
-    const transporter = nodemailer.createTransport({
-      host: config.smtp.host,
-      port: config.smtp.port,
-      secure: config.smtp.port === 465,
-      auth: {
-        user: config.smtp.user,
-        pass: config.smtp.pass,
-      },
-    });
+    try {
+      const transporter = nodemailer.createTransport({
+        host: config.smtp.host,
+        port: config.smtp.port,
+        secure: config.smtp.port === 465,
+        auth: {
+          user: config.smtp.user,
+          pass: config.smtp.pass,
+        },
+      });
 
-    await transporter.sendMail({
-      from: config.smtp.from,
-      to: identifier,
-      subject: 'Smart Solution CRM — Login Verification Code',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333;">
-          <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-            <h2 style="color: #4f46e5; margin-top: 0; text-align: center;">Smart Solution CRM</h2>
-            <p>Hello <strong>${name}</strong>,</p>
-            <p>Your single-use login verification code is:</p>
-            <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1e293b; background: #f1f5f9; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
-              ${otp}
-            </div>
-            <p style="font-size: 13px; color: #64748b; text-align: center;">This code is valid for ${config.otp.validityMin} minutes. Do not share this code with anyone.</p>
-          </div>
-        </div>
-      `,
-    });
-    logger.info(`[OTP:email] Sent OTP to ${identifier}`);
-  }
-}
-
-class ResendProvider implements OtpDeliveryProvider {
-  async send(identifier: string, identifierType: 'phone' | 'email', otp: string, name: string): Promise<void> {
-    if (identifierType !== 'email') {
-      logger.info(`[OTP:console] OTP for ${name} (${identifier}): ${otp}`);
-      return;
-    }
-    if (!config.resendApiKey) {
-      logger.info(`[OTP:console] Real Email OTP for ${name} (${identifier}): ${otp} (RESEND_API_KEY not configured)`);
-      return;
-    }
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'Smart Solution CRM <onboarding@resend.dev>',
-        to: [identifier],
+      await transporter.sendMail({
+        from: config.smtp.from,
+        to: identifier,
         subject: 'Smart Solution CRM — Login Verification Code',
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333;">
@@ -92,16 +54,64 @@ class ResendProvider implements OtpDeliveryProvider {
             </div>
           </div>
         `,
-      }),
-    });
+      });
+      logger.info(`[OTP:email] Sent OTP via SMTP to ${identifier}`);
+    } catch (err: any) {
+      logger.error(`SMTP email delivery failed: ${err.message}`);
+      throw new AppError(`Failed to send OTP email via SMTP: ${err.message}`, 500);
+    }
+  }
+}
 
-    if (!response.ok) {
-      const errText = await response.text();
-      logger.error(`Resend API error: ${errText}`);
-      throw new Error(`Failed to send email via Resend: ${response.statusText}`);
+class ResendProvider implements OtpDeliveryProvider {
+  async send(identifier: string, identifierType: 'phone' | 'email', otp: string, name: string): Promise<void> {
+    if (identifierType !== 'email') {
+      logger.info(`[OTP:console] Phone OTP for ${name} (${identifier}): ${otp}`);
+      return;
+    }
+    if (!config.resendApiKey) {
+      throw new AppError('Resend API key is not configured. Please add RESEND_API_KEY to environment variables.', 500);
     }
 
-    logger.info(`[OTP:email] Sent OTP via Resend to ${identifier}`);
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'Smart Solution CRM <onboarding@resend.dev>',
+          to: [identifier],
+          subject: 'Smart Solution CRM — Login Verification Code',
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333;">
+              <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <h2 style="color: #4f46e5; margin-top: 0; text-align: center;">Smart Solution CRM</h2>
+                <p>Hello <strong>${name}</strong>,</p>
+                <p>Your single-use login verification code is:</p>
+                <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1e293b; background: #f1f5f9; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
+                  ${otp}
+                </div>
+                <p style="font-size: 13px; color: #64748b; text-align: center;">This code is valid for ${config.otp.validityMin} minutes. Do not share this code with anyone.</p>
+              </div>
+            </div>
+          `,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        logger.error(`Resend API error (${response.status}): ${errText}`);
+        throw new AppError(`Resend Email Error: ${errText}`, 500);
+      }
+
+      logger.info(`[OTP:email] Sent OTP via Resend to ${identifier}`);
+    } catch (err: any) {
+      if (err instanceof AppError) throw err;
+      logger.error(`Resend email delivery failed: ${err.message}`);
+      throw new AppError(`Failed to send OTP email: ${err.message}`, 500);
+    }
   }
 }
 
@@ -145,18 +155,19 @@ class Msg91Provider implements OtpDeliveryProvider {
 }
 
 function provider(): OtpDeliveryProvider {
+  if (config.resendApiKey) {
+    return new ResendProvider();
+  }
   if (config.smtp.user && config.smtp.pass) {
     return new SmtpProvider();
   }
   switch (config.otpProvider) {
-    case 'smtp':
-      return new SmtpProvider();
     case 'twilio':
       return new TwilioProvider();
     case 'msg91':
       return new Msg91Provider();
     default:
-      return new SmtpProvider(); // Fallback to SmtpProvider which logs to console if SMTP credentials not configured
+      return new ResendProvider(); // Will throw clear error if RESEND_API_KEY is not set
   }
 }
 
@@ -178,8 +189,7 @@ function deleteOtpState(identifier: string): void {
 }
 
 function issueOtp(identifier: string, identifierType: 'phone' | 'email', name: string): Promise<void> {
-  const isRealSmtp = Boolean(config.smtp.user && config.smtp.pass);
-  const otp = isRealSmtp ? randomOtp(6) : '123456';
+  const otp = randomOtp(6);
   const now = new Date();
   run(
     `INSERT INTO otp_requests (identifier, identifier_type, otp_hash, expires_at, last_sent_at)
