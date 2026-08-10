@@ -25,14 +25,16 @@ export function createApp(): express.Express {
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl, etc.)
+        // Allow requests with no origin (mobile apps, same-origin, curl, etc.)
         if (!origin) return callback(null, true);
         // In development, allow any localhost port
         if (config.nodeEnv !== 'production' && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
           return callback(null, true);
         }
-        // In production, only allow configured origin
-        if (origin === config.appOrigin) return callback(null, true);
+        // In production, allow configured APP_ORIGIN or any .onrender.com domain
+        if (origin === config.appOrigin || origin.endsWith('.onrender.com')) {
+          return callback(null, true);
+        }
         callback(new Error('Not allowed by CORS'));
       },
       credentials: true,
