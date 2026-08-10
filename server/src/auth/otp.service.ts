@@ -223,7 +223,7 @@ function provider(): OtpDeliveryProvider {
     case 'msg91':
       return new Msg91Provider();
     default:
-      return new ResendProvider(); // Will throw clear error if RESEND_API_KEY is not set
+      return new BrevoProvider();
   }
 }
 
