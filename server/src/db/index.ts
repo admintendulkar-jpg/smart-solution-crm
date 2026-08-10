@@ -40,7 +40,14 @@ export function transaction<T>(fn: () => T): T {
 }
 
 export function initializeSchema(): void {
-  const migrationsDir = path.join(__dirname, 'migrations');
+  let migrationsDir = path.join(__dirname, 'migrations');
+  if (!fs.existsSync(migrationsDir)) {
+    migrationsDir = path.resolve(__dirname, '../../src/db/migrations');
+  }
+  if (!fs.existsSync(migrationsDir)) {
+    logger.warn(`Migrations directory not found at ${migrationsDir}`);
+    return;
+  }
   const files = fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))
