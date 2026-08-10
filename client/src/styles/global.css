@@ -1,0 +1,237 @@
+:root {
+  --color-bg: #f4f7ff;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f7f8ff;
+  --color-border: #e1e7f5;
+  --color-border-strong: #c9d5ed;
+
+  --color-text: #1a2332;
+  --color-text-secondary: #556173;
+  --color-text-muted: #8b94a6;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-primary-subtle: #e8efff;
+  --color-primary-soft: #f2f6ff;
+  --color-primary-bg: #edf3ff;
+
+  --color-accent: #9333ea;
+  --color-accent-hover: #7e22ce;
+  --color-accent-subtle: #f5eaff;
+  --color-teal: #0f9f91;
+  --color-pink: #db2777;
+
+  --gradient-primary: linear-gradient(125deg, #2563eb 0%, #7c3aed 52%, #db2777 100%);
+  --gradient-sidebar: linear-gradient(180deg, #111a42 0%, #192b62 48%, #24144b 100%);
+  --gradient-card: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.6) 100%);
+
+  --glass-bg: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --glass-blur: 14px;
+
+  --color-success: #16a34a;
+  --color-success-text: #15803d;
+  --color-success-bg: #e9f9ef;
+
+  --color-warning: #f59e0b;
+  --color-warning-text: #92600a;
+  --color-warning-bg: #fef5e3;
+
+  --color-danger: #dc2626;
+  --color-danger-text: #b91c1c;
+  --color-danger-bg: #fef1f1;
+
+  --color-grey: #98a2b3;
+  --color-grey-text: #5c6675;
+  --color-grey-bg: #f2f4f7;
+
+  --color-orange: #f04438;
+  --color-orange-bg: #fef0ee;
+
+  --color-info: #2563eb;
+  --color-info-text: #1d4ed8;
+  --color-info-bg: #e9f0fe;
+
+  --font-family:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-md: 14px;
+  --text-lg: 15px;
+  --text-xl: 17px;
+  --text-2xl: 22px;
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 13px;
+  --radius-xl: 18px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 8px 22px rgba(44, 67, 120, 0.09), 0 2px 5px rgba(44, 67, 120, 0.04);
+  --shadow-lg: 0 20px 46px rgba(35, 52, 105, 0.18), 0 5px 14px rgba(35, 52, 105, 0.06);
+  --shadow-glow: 0 0 0 4px rgba(37, 99, 235, 0.12), 0 6px 20px rgba(37, 99, 235, 0.2);
+
+  --sidebar-width: 236px;
+  --topbar-height: 58px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(99, 102, 241, 0.16), transparent 32rem),
+    radial-gradient(circle at 100% 0%, rgba(236, 72, 153, 0.1), transparent 28rem),
+    var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.3);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9cfd8;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #aab3c0;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* ---------- Animations ---------- */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 320ms ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 260ms ease-out both;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 0px;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    background: #fff;
+    color: #000;
+  }
+  .modal-overlay {
+    position: absolute;
+  }
+  .modal {
+    box-shadow: none;
+  }
+}
