@@ -23,52 +23,62 @@ class SmtpProvider implements OtpDeliveryProvider {
       return;
     }
     if (!config.smtp.user || !config.smtp.pass) {
-      throw new AppError(500, 'Email service is not configured. Please set RESEND_API_KEY or SMTP credentials in server environment variables.');
+      throw new AppError(500, 'Email service is not configured. Please set SMTP credentials in server environment variables.');
     }
 
-    try {
-      const port = Number(config.smtp.port) || 587;
-      const isSecure = port === 465;
+    const host = config.smtp.host || 'smtp.gmail.com';
+    const user = config.smtp.user.trim();
+    const pass = config.smtp.pass.replace(/\s+/g, '');
+    const userPort = Number(config.smtp.port) || 587;
 
-      const transporter = nodemailer.createTransport({
-        host: config.smtp.host || 'smtp.gmail.com',
-        port,
-        secure: isSecure,
-        auth: {
-          user: config.smtp.user.trim(),
-          pass: config.smtp.pass.replace(/\s+/g, ''), // Strip any spaces from Google App Password
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        tls: {
-          rejectUnauthorized: false,
-        },
-      });
+    // Try ports in order: userPort first, then 587, 2525, 465
+    const portsToTry = Array.from(new Set([userPort, 587, 2525, 465]));
+    let lastError: Error | null = null;
 
-      await transporter.sendMail({
-        from: config.smtp.from,
-        to: identifier,
-        subject: 'Smart Solution CRM — Login Verification Code',
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333;">
-            <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-              <h2 style="color: #4f46e5; margin-top: 0; text-align: center;">Smart Solution CRM</h2>
-              <p>Hello <strong>${name}</strong>,</p>
-              <p>Your single-use login verification code is:</p>
-              <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1e293b; background: #f1f5f9; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
-                ${otp}
+    for (const port of portsToTry) {
+      try {
+        const isSecure = port === 465;
+        const transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure: isSecure,
+          requireTLS: !isSecure,
+          auth: { user, pass },
+          connectionTimeout: 7000,
+          greetingTimeout: 7000,
+          socketTimeout: 10000,
+          tls: { rejectUnauthorized: false },
+        });
+
+        await transporter.sendMail({
+          from: config.smtp.from || `Smart Solution CRM <${user}>`,
+          to: identifier,
+          subject: 'Smart Solution CRM — Login Verification Code',
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333;">
+              <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <h2 style="color: #4f46e5; margin-top: 0; text-align: center;">Smart Solution CRM</h2>
+                <p>Hello <strong>${name}</strong>,</p>
+                <p>Your single-use login verification code is:</p>
+                <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1e293b; background: #f1f5f9; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
+                  ${otp}
+                </div>
+                <p style="font-size: 13px; color: #64748b; text-align: center;">This code is valid for ${config.otp.validityMin} minutes. Do not share this code with anyone.</p>
               </div>
-              <p style="font-size: 13px; color: #64748b; text-align: center;">This code is valid for ${config.otp.validityMin} minutes. Do not share this code with anyone.</p>
             </div>
-          </div>
-        `,
-      });
-      logger.info(`[OTP:email] Sent OTP via SMTP to ${identifier}`);
-    } catch (err: any) {
-      logger.error(`SMTP email delivery failed: ${err.message}`);
-      throw new AppError(500, `Failed to send OTP email via SMTP: ${err.message}`);
+          `,
+        });
+
+        logger.info(`[OTP:email] Sent OTP via SMTP (${host}:${port}) to ${identifier}`);
+        return;
+      } catch (err: any) {
+        logger.warn(`SMTP attempt on ${host}:${port} failed: ${err.message}. Trying next port...`);
+        lastError = err;
+      }
     }
+
+    logger.error(`All SMTP attempts failed for ${identifier}: ${lastError?.message}`);
+    throw new AppError(500, `Failed to send OTP email via SMTP: ${lastError?.message || 'Connection timeout'}`);
   }
 }
 
