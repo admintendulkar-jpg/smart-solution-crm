@@ -27,13 +27,22 @@ class SmtpProvider implements OtpDeliveryProvider {
     }
 
     try {
+      const port = Number(config.smtp.port) || 587;
+      const isSecure = port === 465;
+
       const transporter = nodemailer.createTransport({
-        host: config.smtp.host,
-        port: config.smtp.port,
-        secure: config.smtp.port === 465,
+        host: config.smtp.host || 'smtp.gmail.com',
+        port,
+        secure: isSecure,
         auth: {
-          user: config.smtp.user,
-          pass: config.smtp.pass,
+          user: config.smtp.user.trim(),
+          pass: config.smtp.pass.replace(/\s+/g, ''), // Strip any spaces from Google App Password
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+        tls: {
+          rejectUnauthorized: false,
         },
       });
 
