@@ -58,6 +58,53 @@ class SmtpProvider implements OtpDeliveryProvider {
   }
 }
 
+class ResendProvider implements OtpDeliveryProvider {
+  async send(identifier: string, identifierType: 'phone' | 'email', otp: string, name: string): Promise<void> {
+    if (identifierType !== 'email') {
+      logger.info(`[OTP:console] OTP for ${name} (${identifier}): ${otp}`);
+      return;
+    }
+    if (!config.resendApiKey) {
+      logger.info(`[OTP:console] Real Email OTP for ${name} (${identifier}): ${otp} (RESEND_API_KEY not configured)`);
+      return;
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Smart Solution CRM <onboarding@resend.dev>',
+        to: [identifier],
+        subject: 'Smart Solution CRM — Login Verification Code',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333;">
+            <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+              <h2 style="color: #4f46e5; margin-top: 0; text-align: center;">Smart Solution CRM</h2>
+              <p>Hello <strong>${name}</strong>,</p>
+              <p>Your single-use login verification code is:</p>
+              <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #1e293b; background: #f1f5f9; padding: 15px; text-align: center; border-radius: 6px; margin: 20px 0;">
+                ${otp}
+              </div>
+              <p style="font-size: 13px; color: #64748b; text-align: center;">This code is valid for ${config.otp.validityMin} minutes. Do not share this code with anyone.</p>
+            </div>
+          </div>
+        `,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      logger.error(`Resend API error: ${errText}`);
+      throw new Error(`Failed to send email via Resend: ${response.statusText}`);
+    }
+
+    logger.info(`[OTP:email] Sent OTP via Resend to ${identifier}`);
+  }
+}
+
 class TwilioProvider implements OtpDeliveryProvider {
   async send(identifier: string, identifierType: 'phone' | 'email', otp: string): Promise<void> {
     if (identifierType !== 'phone') throw new Error('Twilio provider supports phone only');

@@ -75,4 +75,5 @@ export const config = {
     pass: process.env.SMTP_PASS ?? process.env.GMAIL_APP_PASS ?? '',
     from: process.env.SMTP_FROM ?? 'Smart Solution CRM <noreply@smartsolutionagency.in>',
   },
+  resendApiKey: process.env.RESEND_API_KEY ?? '',
 };
