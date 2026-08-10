@@ -43,12 +43,13 @@ class SmtpProvider implements OtpDeliveryProvider {
           port,
           secure: isSecure,
           requireTLS: !isSecure,
+          family: 4, // Force IPv4 to prevent ENETUNREACH IPv6 errors in cloud containers
           auth: { user, pass },
           connectionTimeout: 7000,
           greetingTimeout: 7000,
           socketTimeout: 10000,
           tls: { rejectUnauthorized: false },
-        });
+        } as any);
 
         await transporter.sendMail({
           from: config.smtp.from || `Smart Solution CRM <${user}>`,
