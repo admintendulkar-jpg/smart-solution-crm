@@ -50,12 +50,19 @@ export interface LeadListResponse {
 
 export interface CallLog {
   id: number;
-  lead_id: number;
+  lead_id: number | null;
+  client_id?: number | null;
   user_id: number;
   user_name: string;
   outcome: string;
   duration_sec: number;
   note: string | null;
+  provider?: string;
+  status?: string | null;
+  recording_url?: string | null;
+  exotel_call_sid?: string | null;
+  agent_phone?: string | null;
+  customer_phone?: string | null;
   created_at: string;
 }
 

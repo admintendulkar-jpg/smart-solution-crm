@@ -16,6 +16,7 @@ import { adminRoutes } from './modules/admin/routes';
 import { clientsRoutes } from './modules/clients/routes';
 import { hrRoutes } from './modules/hr/routes';
 import { documentsRoutes } from './modules/documents/routes';
+import { telephonyRoutes } from './modules/telephony/routes';
 
 export function createApp(): express.Express {
   const app = express();
@@ -82,6 +83,7 @@ export function createApp(): express.Express {
   app.use('/api/clients', clientsRoutes);
   app.use('/api/hr', hrRoutes);
   app.use('/api/documents', documentsRoutes);
+  app.use('/api/telephony', telephonyRoutes);
 
   // In production, serve the built React client SPA bundle
   const clientDistPath = path.resolve(__dirname, '../../client/dist');

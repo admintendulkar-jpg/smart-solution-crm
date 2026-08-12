@@ -553,6 +553,8 @@ interface TimelineItem {
   sub?: string;
   by: string;
   durationSec?: number;
+  provider?: string;
+  recordingUrl?: string | null;
 }
 
 function ActivityTimeline({
@@ -588,6 +590,8 @@ function ActivityTimeline({
       sub: c.note ?? undefined,
       by: c.user_name,
       durationSec: c.duration_sec,
+      provider: c.provider,
+      recordingUrl: c.recording_url,
     })),
     ...notes.map((n) => ({
       id: `n${n.id}`,
@@ -658,11 +662,22 @@ function ActivityTimeline({
                   </div>
                   <div style={{ fontSize: 12.5, lineHeight: 1.55, flex: 1 }}>
                     <span style={{ fontWeight: 600 }}>{item.title}</span>
-                    {typeof item.durationSec === 'number' && (
+                    {item.provider === 'exotel' && (
+                      <span className="badge" style={{ marginLeft: 6, fontSize: 10, background: 'var(--color-primary-soft)', color: 'var(--color-primary)' }}>
+                        Exotel
+                      </span>
+                    )}
+                    {typeof item.durationSec === 'number' && item.durationSec > 0 && (
                       <span style={{ color: 'var(--color-text-muted)' }}> · {formatDuration(item.durationSec)}</span>
                     )}
                     <span style={{ color: 'var(--color-text-muted)' }}> · {formatDateTime(item.ts)}</span>
                     {item.sub && <div style={{ color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap', marginTop: 2 }}>{item.sub}</div>}
+                    {item.recordingUrl && (
+                      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)' }}>🎧 Recording:</span>
+                        <audio controls src={item.recordingUrl} style={{ height: 28, maxWidth: 280 }} />
+                      </div>
+                    )}
                     <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 2 }}>{item.by}</div>
                   </div>
                 </div>
@@ -719,6 +734,16 @@ export function LeadDetailPage() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
+  const clickToCallMutation = useMutation({
+    mutationFn: () => api.post<{ message: string; callLogId: number }>('/telephony/call', { leadId }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast.success(data.message || 'Call initiated. Exotel is connecting your phone...');
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+
   const [assignTarget, setAssignTarget] = useState<number | null>(null);
 
   if (isError) return <ErrorState error={isError} />;
@@ -763,6 +788,14 @@ export function LeadDetailPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {(canAct || canAdmin) && !isConverted && (
             <>
+              <Button
+                variant="secondary"
+                icon={<Phone size={14} style={{ color: 'var(--color-primary)' }} />}
+                onClick={() => clickToCallMutation.mutate()}
+                loading={clickToCallMutation.isPending}
+              >
+                Click to Call
+              </Button>
               <Button icon={<PhoneCall size={14} />} onClick={() => setShowCallModal(true)}>
                 Log call
               </Button>

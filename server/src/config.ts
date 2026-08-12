@@ -77,4 +77,16 @@ export const config = {
   },
   resendApiKey: process.env.RESEND_API_KEY ?? '',
   brevoApiKey: process.env.BREVO_API_KEY ?? '',
+
+  telephony: {
+    provider: (process.env.TELEPHONY_PROVIDER ?? 'exotel') as 'exotel' | 'none',
+    mode: (process.env.TELEPHONY_MODE ?? 'trial') as 'trial' | 'production',
+    accountSid: process.env.EXOTEL_ACCOUNT_SID ?? '',
+    apiKey: process.env.EXOTEL_API_KEY ?? '',
+    apiToken: process.env.EXOTEL_API_TOKEN ?? '',
+    subdomain: process.env.EXOTEL_SUBDOMAIN || 'api.exotel.com',
+    exophone: process.env.EXOTEL_EXOPHONE ?? '',
+    appId: process.env.EXOTEL_APP_ID ?? '',
+    testAgentPhone: process.env.EXOTEL_TEST_AGENT_PHONE ?? '',
+  },
 };

@@ -170,6 +170,15 @@ export function ClientDetailPage() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
+  const clickToCallMutation = useMutation({
+    mutationFn: () => api.post<{ message: string; callLogId: number }>('/telephony/call', { clientId }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clientDetail(clientId) });
+      toast.success(data.message || 'Call initiated via Exotel. Connecting your phone...');
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+
   if (!Number.isFinite(clientId) || clientId <= 0) {
     return <ErrorState error={new Error('Invalid client id.')} />;
   }
@@ -207,6 +216,14 @@ export function ClientDetailPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button
+            variant="secondary"
+            icon={<Phone size={14} style={{ color: 'var(--color-primary)' }} />}
+            onClick={() => clickToCallMutation.mutate()}
+            loading={clickToCallMutation.isPending}
+          >
+            Click to Call
+          </Button>
           <Button
             variant="secondary"
             icon={<Banknote size={14} />}
