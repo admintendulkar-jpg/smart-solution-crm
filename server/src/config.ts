@@ -51,8 +51,8 @@ export const config = {
   sheetSyncMinutes: int(process.env.SHEET_SYNC_MINUTES, 15),
 
   sheets: {
-    enabled: Boolean(process.env.GOOGLE_SHEET_ID && isRealGoogleCreds()),
-    sheetId: process.env.GOOGLE_SHEET_ID ?? '',
+    enabled: Boolean(process.env.GOOGLE_SHEET_ID ?? '1l_RvoVCJYWcR6IPsGFuHQFtGBBI8lkTivPOqzIenmvw'),
+    sheetId: process.env.GOOGLE_SHEET_ID ?? '1l_RvoVCJYWcR6IPsGFuHQFtGBBI8lkTivPOqzIenmvw',
     serviceAccountFile,
     serviceAccountJson,
     range: process.env.SHEET_RANGE ?? 'Leads!A:H',
