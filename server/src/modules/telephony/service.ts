@@ -92,10 +92,10 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
     throw new AppError(400, 'Your account does not have a valid registered phone number for placing calls.', 'AGENT_PHONE_MISSING');
   }
 
-  // 3. Idempotency Check (Prevent duplicate call clicks within 10s)
+  // 3. Idempotency Check (Prevent duplicate call clicks within 3s)
   const lockKey = `${user.id}:${leadId || clientId}`;
   const lastCallTime = activeCallLocks.get(lockKey) ?? 0;
-  if (Date.now() - lastCallTime < 10000) {
+  if (Date.now() - lastCallTime < 3000) {
     throw new AppError(429, 'A call is already being initiated. Please wait a moment.', 'DUPLICATE_CALL_REQUEST');
   }
   activeCallLocks.set(lockKey, Date.now());
@@ -129,6 +129,7 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
       message: 'Call initiated. Exotel is connecting your phone first.',
     };
   } catch (err) {
+    activeCallLocks.delete(lockKey);
     run("UPDATE call_logs SET status = 'Failed', outcome = 'Failed' WHERE id = ?", [callLogId]);
     throw err;
   }
