@@ -50,6 +50,11 @@ interface CreateForm {
 const EMPTY_CREATE: CreateForm = { name: '', phone: '', email: '', role: 'sales', branch: 'Coimbatore', designation: '', department: '', joining_date: '' };
 
 interface EditForm {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  branch: string;
   designation: string;
   department: string;
   joining_date: string;
@@ -65,7 +70,18 @@ export function HrEmployees() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateForm>(EMPTY_CREATE);
   const [editing, setEditing] = useState<EmployeeRow | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ designation: '', department: '', joining_date: '', salary_grade: '', active: true });
+  const [editForm, setEditForm] = useState<EditForm>({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'sales',
+    branch: 'Coimbatore',
+    designation: '',
+    department: '',
+    joining_date: '',
+    salary_grade: '',
+    active: true,
+  });
   const [toggleTarget, setToggleTarget] = useState<EmployeeRow | null>(null);
 
   const queryKey = QUERY_KEYS.hrEmployees(`${role}|${search.trim()}`);
@@ -103,6 +119,7 @@ export function HrEmployees() {
     mutationFn: (patch: Record<string, unknown>) => api.patch(`/hr/employees/${editing!.id}`, patch),
     onSuccess: () => {
       invalidate();
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users('all') });
       toast.success('Profile updated.');
       setEditing(null);
     },
@@ -112,6 +129,11 @@ export function HrEmployees() {
   function openEdit(e: EmployeeRow) {
     setEditing(e);
     setEditForm({
+      name: e.name,
+      email: e.email ?? '',
+      phone: e.phone ?? '',
+      role: e.role,
+      branch: e.branch,
       designation: e.designation ?? '',
       department: e.department ?? '',
       joining_date: formatDateInputValue(e.joining_date),
@@ -122,6 +144,11 @@ export function HrEmployees() {
 
   function saveEdit() {
     updateMutation.mutate({
+      name: editForm.name,
+      email: editForm.email || '',
+      phone: editForm.phone,
+      role: editForm.role,
+      branch: editForm.branch,
       designation: editForm.designation || '',
       department: editForm.department || '',
       joining_date: editForm.joining_date || '',
@@ -295,6 +322,33 @@ export function HrEmployees() {
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Field label="Full name">
+            <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Full name" />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <Field label="Phone (login)">
+              <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Mobile number" />
+            </Field>
+            <Field label="Work email">
+              <Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Work email" />
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <Field label="Role">
+              <Select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })} disabled={editing?.role === 'super_admin'}>
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Branch">
+              <Select value={editForm.branch} onChange={(e) => setEditForm({ ...editForm, branch: e.target.value })}>
+                {BRANCHES.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </Select>
+            </Field>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <Field label="Designation">
               <Input value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })} />
