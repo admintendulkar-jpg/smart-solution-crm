@@ -80,11 +80,12 @@ router.get(
   '/sheets/status',
   asyncHandler(async (_req, res) => {
     const adapter = getAdapter();
+    const sheetId = config.sheets.sheetId;
     res.json({
-      configured: config.sheets.enabled,
+      configured: Boolean(sheetId),
       provider: adapter.name,
-      sheetId: config.sheets.enabled ? config.sheets.sheetId : null,
-      syncMinutes: config.sheets.enabled ? config.sheetSyncMinutes : null,
+      sheetId: sheetId || null,
+      syncMinutes: config.sheetSyncMinutes,
     });
   }),
 );
