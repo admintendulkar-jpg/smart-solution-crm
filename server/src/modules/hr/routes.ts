@@ -691,6 +691,11 @@ router.get(
 );
 
 const updateEmployeeSchema = z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  phone: z.string().trim().min(10).max(15).optional(),
+  role: z.enum(['super_admin', 'admin', 'sales', 'service', 'hr']).optional(),
+  branch: z.enum(['Coimbatore', 'Bangalore', 'Dharmapuri']).optional(),
   designation: z.string().trim().max(100).optional().or(z.literal('')),
   department: z.string().trim().max(100).optional().or(z.literal('')),
   joining_date: z.string().trim().optional().or(z.literal('')),
@@ -711,7 +716,7 @@ router.patch(
     const id = Number(req.params.id);
     const body = updateEmployeeSchema.parse(req.body);
 
-    const target = get<{ id: number; name: string; role: string }>('SELECT id, name, role FROM users WHERE id = ?', [id]);
+    const target = get<{ id: number; name: string; role: string; email: string | null; phone: string | null }>('SELECT id, name, role, email, phone FROM users WHERE id = ?', [id]);
     if (!target) {
       throw new AppError(404, 'Employee not found.', 'EMPLOYEE_NOT_FOUND');
     }
@@ -719,9 +724,33 @@ router.patch(
       throw new AppError(400, 'Invalid joining date.', 'VALIDATION_ERROR');
     }
 
+    if (body.phone && body.phone !== target.phone) {
+      const clash = get('SELECT id FROM users WHERE phone = ? AND id != ?', [body.phone, id]);
+      if (clash) {
+        throw new AppError(409, 'A user with this phone number already exists.', 'DUPLICATE_PHONE');
+      }
+    }
+    if (body.email !== undefined && body.email?.trim() !== target.email) {
+      const email = body.email?.trim() || null;
+      const clash = email ? get('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]) : null;
+      if (clash) {
+        throw new AppError(409, 'A user with this email already exists.', 'DUPLICATE_EMAIL');
+      }
+    }
+
     transaction(() => {
-      if (body.active !== undefined) {
-        run('UPDATE users SET active = ?, updated_at = datetime(\'now\') WHERE id = ?', [body.active ? 1 : 0, id]);
+      const userFields: string[] = [];
+      const userParams: unknown[] = [];
+      if (body.name !== undefined) { userFields.push('name = ?'); userParams.push(body.name); }
+      if (body.email !== undefined) { userFields.push('email = ?'); userParams.push(body.email?.trim() || null); }
+      if (body.phone !== undefined) { userFields.push('phone = ?'); userParams.push(body.phone); }
+      if (body.role !== undefined) { userFields.push('role = ?'); userParams.push(body.role); }
+      if (body.branch !== undefined) { userFields.push('branch = ?'); userParams.push(body.branch); }
+      if (body.active !== undefined) { userFields.push('active = ?'); userParams.push(body.active ? 1 : 0); }
+
+      if (userFields.length) {
+        userFields.push("updated_at = datetime('now')");
+        run(`UPDATE users SET ${userFields.join(', ')} WHERE id = ?`, [...userParams, id]);
       }
       const existing = get<{ id: number }>('SELECT id FROM employee_profiles WHERE user_id = ?', [id]);
       if (existing) {

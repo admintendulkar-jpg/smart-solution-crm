@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, FileSpreadsheet, RefreshCw, Database, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, RefreshCw, Database, CheckCircle2 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { QUERY_KEYS } from '@/lib/constants';
 import { formatDateTime } from '@/lib/format';
@@ -117,26 +117,41 @@ export function ImportPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Google Sheets sync" subtitle="Live lead intake from your master sheet" actions={sheetsStatus?.configured ? <Button variant="secondary" size="sm" icon={<RefreshCw size={13} />} loading={syncNow.isPending} onClick={() => syncNow.mutate()}>Sync now</Button> : undefined} />
+          <CardHeader
+            title="Google Sheets Auto-Sync"
+            subtitle="Optional automated intake from a master Google Sheet"
+            actions={
+              sheetsStatus?.configured ? (
+                <Button variant="secondary" size="sm" icon={<RefreshCw size={13} />} loading={syncNow.isPending} onClick={() => syncNow.mutate()}>
+                  Sync now
+                </Button>
+              ) : undefined
+            }
+          />
           <CardBody>
             {sheetsStatus?.configured ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div className="alert alert-success" style={{ fontSize: 12.5 }}>
                   <Database size={15} style={{ flexShrink: 0, marginTop: 1 }} />
                   <span>
-                    Connected to sheet <strong>{sheetsStatus.sheetId}</strong>. Auto-sync every {sheetsStatus.syncMinutes} minutes.
+                    Connected to sheet <strong>{sheetsStatus.sheetId}</strong>. Auto-syncing every {sheetsStatus.syncMinutes} minutes.
                   </span>
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-                  New rows added to the sheet are pulled into the database automatically and appear in the unassigned pool for the daily split. Status changes never write back to the sheet.
+                  New rows added to your Google Sheet are pulled into the CRM database automatically.
                 </div>
               </div>
             ) : (
-              <div className="alert alert-warning" style={{ fontSize: 12.5 }}>
-                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span>
-                  Not configured on this server. Set <code>GOOGLE_SHEET_ID</code> and <code>GOOGLE_SERVICE_ACCOUNT_FILE</code> in <code>server/.env</code> to enable live sync.
-                </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="alert alert-info" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                  <CheckCircle2 size={15} style={{ flexShrink: 0, marginTop: 1, color: 'var(--color-primary)' }} />
+                  <span>
+                    <strong>CSV Upload Active:</strong> You can upload leads directly using the CSV file box on the left anytime.
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6, padding: '10px 12px', background: 'var(--color-grey-bg)', borderRadius: 'var(--radius-sm)' }}>
+                  💡 <strong>Google Sheets Live Sync (Optional):</strong> To automatically pull leads from a Google Sheet every few minutes, add <code>GOOGLE_SHEET_ID</code> and <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> in Render Environment Variables.
+                </div>
               </div>
             )}
             <div style={{ marginTop: 16 }}>

@@ -215,7 +215,17 @@ export function UsersPage() {
             <Button
               loading={createMutation.isPending || updateMutation.isPending}
               disabled={!form.name.trim() || !isValidPhone(form.phone)}
-              onClick={() => (editing ? updateMutation.mutate({ name: form.name, email: form.email || '', phone: form.phone, branch: form.branch }) : createMutation.mutate())}
+              onClick={() =>
+                editing
+                  ? updateMutation.mutate({
+                      name: form.name,
+                      email: form.email || '',
+                      phone: form.phone,
+                      role: form.role,
+                      branch: form.branch,
+                    })
+                  : createMutation.mutate()
+              }
             >
               {editing ? 'Save changes' : 'Add member'}
             </Button>

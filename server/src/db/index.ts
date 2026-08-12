@@ -109,11 +109,6 @@ export function ensureRealUsers(): void {
         `INSERT INTO users (name, email, phone, role, branch, active) VALUES (?, ?, ?, ?, ?, 1)`,
         [u.name, u.email, u.phone, u.role, u.branch]
       );
-    } else {
-      run(
-        `UPDATE users SET name = ?, email = ?, phone = ?, role = ?, branch = ?, active = 1 WHERE id = ?`,
-        [u.name, u.email, u.phone, u.role, u.branch, existing.id]
-      );
     }
   }
 }
