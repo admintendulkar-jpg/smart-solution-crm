@@ -131,7 +131,9 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
   } catch (err) {
     activeCallLocks.delete(lockKey);
     run("UPDATE call_logs SET status = 'Failed', outcome = 'Failed' WHERE id = ?", [callLogId]);
-    throw err;
+    if (err instanceof AppError) throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AppError(400, msg, 'EXOTEL_CALL_FAILED');
   }
 }
 
