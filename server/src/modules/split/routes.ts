@@ -187,4 +187,14 @@ router.post(
   }),
 );
 
+// Force-assign ALL unassigned leads — bypasses quota and enabled flag
+router.post(
+  '/assign-all',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const result = await assignAllUnassignedLeads(user.id);
+    res.json({ assigned: result.assigned });
+  }),
+);
+
 export const splitRoutes = router;

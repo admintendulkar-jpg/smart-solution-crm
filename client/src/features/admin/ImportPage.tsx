@@ -55,7 +55,9 @@ export function ImportPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.batches });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast.success(`Sheets sync complete: ${result.imported} new, ${result.duplicates} duplicates.`);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.splitPreview });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
+      toast.success(`Sheets sync complete: ${result.imported} new, ${result.duplicates} duplicates, leads auto-distributed to team.`);
     },
     onError: (err) => toast.error(errorMessage(err)),
   });

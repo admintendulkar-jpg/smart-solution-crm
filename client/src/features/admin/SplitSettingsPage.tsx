@@ -100,6 +100,21 @@ export function SplitSettingsPage() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
+  const forceAssign = useMutation({
+    mutationFn: () => api.post<{ assigned: number }>('/admin/split/assign-all', {}),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.splitPreview });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
+      if (result.assigned > 0) {
+        toast.success(`✅ ${result.assigned} leads distributed to your sales team!`);
+      } else {
+        toast.success('All leads are already assigned — nothing to distribute.');
+      }
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+
   const totalReps = preview?.reps.length ?? 0;
   void totalReps;
 
@@ -166,9 +181,21 @@ export function SplitSettingsPage() {
                   </span>
                 </div>
 
-                <Button icon={<Play size={14} />} loading={runSplit.isPending} disabled={!preview.enabled || preview.pool === 0} onClick={() => runSplit.mutate()}>
-                  Run split now
-                </Button>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <Button icon={<Play size={14} />} loading={runSplit.isPending} disabled={!preview.enabled || preview.pool === 0} onClick={() => runSplit.mutate()}>
+                    Run split now
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    icon={<Play size={14} />}
+                    loading={forceAssign.isPending}
+                    disabled={preview.reps.length === 0}
+                    onClick={() => forceAssign.mutate()}
+                    title="Assigns ALL unassigned leads — bypasses quota and enabled settings"
+                  >
+                    🚀 Force Assign All
+                  </Button>
+                </div>
               </>
             )}
           </CardBody>
