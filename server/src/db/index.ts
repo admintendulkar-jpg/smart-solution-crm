@@ -282,6 +282,9 @@ export async function ensureRealUsers(): Promise<void> {
     { name: 'Service Support', email: 'service@smartsolutionagency.in', phone: '9000000007', role: 'service', branch: 'Coimbatore' },
   ];
 
+  // Deactivate old placeholder sample reps
+  await run(`UPDATE users SET active = 0 WHERE email LIKE '%@example.com' OR name IN ('Karthik R', 'Priya N', 'Arun Kumar', 'Divya S', 'Mohammed Faisal', 'Rahul Sharma', 'Meena V', 'Deepak P', 'Lakshmi K')`);
+
   for (const u of REAL_USERS) {
     const existing = await get<{ id: number }>('SELECT id FROM users WHERE phone = ? OR (email IS NOT NULL AND email = ?)', [u.phone, u.email]);
     if (!existing) {
@@ -292,6 +295,8 @@ export async function ensureRealUsers(): Promise<void> {
         u.role,
         u.branch,
       ]);
+    } else {
+      await run(`UPDATE users SET active = 1, role = ? WHERE id = ?`, [u.role, existing.id]);
     }
   }
 
@@ -320,5 +325,25 @@ export async function ensureRealUsers(): Promise<void> {
     } catch (err) {
       logger.warn(`Failed to re-apply user overrides: ${err}`);
     }
+  }
+
+  // Auto-assign any unassigned leads to real active sales reps
+  try {
+    const unassignedCount = (await get<{ c: number }>('SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = "New"'))?.c ?? 0;
+    if (unassignedCount > 0) {
+      const activeSales = await all<{ id: number }>('SELECT id FROM users WHERE role = "sales" AND active = 1 ORDER BY id ASC');
+      if (activeSales.length > 0) {
+        const unassignedLeads = await all<{ id: number }>('SELECT id FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = "New" ORDER BY id ASC');
+        let idx = 0;
+        for (const lead of unassignedLeads) {
+          const rep = activeSales[idx % activeSales.length];
+          await run('UPDATE leads SET assigned_to = ?, assigned_at = datetime("now") WHERE id = ?', [rep.id, lead.id]);
+          idx += 1;
+        }
+        logger.info(`Auto-assigned ${unassignedLeads.length} leads across ${activeSales.length} active sales reps.`);
+      }
+    }
+  } catch (err) {
+    logger.warn(`Failed to auto-assign unassigned leads on boot: ${err}`);
   }
 }
