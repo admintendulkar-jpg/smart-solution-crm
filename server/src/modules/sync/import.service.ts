@@ -2,6 +2,7 @@ import { SETTINGS_KEYS } from '../../constants';
 import { all, get, run, transaction } from '../../db';
 import { recordAudit } from '../audit';
 import { notifyRole } from '../notifications';
+import { runLeadSplitEngine } from '../split/routes';
 
 export interface IncomingLead {
   externalKey?: string;
@@ -107,10 +108,16 @@ export async function importLeads(
   });
 
   if (result.imported > 0) {
+    try {
+      await runLeadSplitEngine(undefined, actorId ?? undefined);
+    } catch {
+      // lead split optional fallback
+    }
+
     await notifyRole(
       'sales',
       `${result.imported} new leads available`,
-      `New leads were synced from ${sourceLabel}. They will be split by the owner.`,
+      `New leads were synced from ${sourceLabel}.`,
     );
   }
 

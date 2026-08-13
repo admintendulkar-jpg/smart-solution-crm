@@ -74,12 +74,12 @@ export class GoogleSheetsAdapter implements LeadSourceAdapter {
       return -1;
     };
 
-    const nameCol = findCol('full_name', 'name', 'lead_name', 'customer_name');
-    const phoneCol = findCol('phone', 'mobile', 'contact', 'phone_number');
-    const emailCol = findCol('email', 'email_id');
-    const whatsappCol = findCol('whatsapp', 'whatsapp_number');
-    const sourceCol = findCol('platform', 'source', 'campaign_name');
-    const serviceCol = findCol('form_name', 'service', 'ad_name');
+    const nameCol = findCol('full_name', 'name', 'lead_name', 'customer_name', 'full name', 'customer name', 'lead name', 'client_name', 'client name');
+    const phoneCol = findCol('phone', 'mobile', 'contact', 'phone_number', 'phone number', 'mobile number', 'cell', 'contact_number', 'contact number');
+    const emailCol = findCol('email', 'email_id', 'email id', 'email address', 'email_address');
+    const whatsappCol = findCol('whatsapp', 'whatsapp_number', 'whatsapp number', 'wa_number');
+    const sourceCol = findCol('platform', 'source', 'campaign_name', 'campaign', 'utm_source');
+    const serviceCol = findCol('form_name', 'service', 'ad_name', 'ad name', 'form');
 
     if (nameCol === -1 || phoneCol === -1) {
       logger.warn(`Sheets header mismatch. Headers found: ${headers.join(', ')}`);

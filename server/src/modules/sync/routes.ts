@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { requireAuth, requireSuperAdmin } from '../../auth/guards';
+import { requireAdminOrAbove, requireAuth } from '../../auth/guards';
 import { AppError, asyncHandler } from '../../errors';
 import { config } from '../../config';
 import { logger } from '../../logger';
@@ -23,7 +23,7 @@ const upload = multer({
 });
 
 router.use(requireAuth);
-router.use(requireSuperAdmin);
+router.use(requireAdminOrAbove);
 
 router.post(
   '/import/csv',
