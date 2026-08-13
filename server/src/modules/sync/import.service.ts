@@ -2,7 +2,7 @@ import { SETTINGS_KEYS } from '../../constants';
 import { all, get, run, transaction } from '../../db';
 import { recordAudit } from '../audit';
 import { notifyRole } from '../notifications';
-import { runLeadSplitEngine } from '../split/routes';
+import { runLeadSplitEngine, assignAllUnassignedLeads } from '../split/routes';
 
 export interface IncomingLead {
   externalKey?: string;
@@ -107,13 +107,14 @@ export async function importLeads(
     );
   });
 
-  if (result.imported > 0) {
-    try {
-      await runLeadSplitEngine(undefined, actorId ?? undefined);
-    } catch {
-      // lead split optional fallback
-    }
+  // Always try to assign unassigned leads after every sync, regardless of how many were newly imported
+  try {
+    await assignAllUnassignedLeads(actorId ?? undefined);
+  } catch (err) {
+    // non-fatal
+  }
 
+  if (result.imported > 0) {
     await notifyRole(
       'sales',
       `${result.imported} new leads available`,

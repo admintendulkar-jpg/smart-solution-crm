@@ -109,6 +109,54 @@ export async function runLeadSplitEngine(overrideCount?: number, actorId?: numbe
   return { assigned };
 }
 
+/**
+ * Unconditionally assign all unassigned leads to active sales reps (round-robin).
+ * Used after sync to ensure leads are always visible to sales reps,
+ * bypassing the leadSplitEnabled setting flag.
+ */
+export async function assignAllUnassignedLeads(actorId?: number): Promise<{ assigned: number }> {
+  const reps = await all<{ id: number; name: string }>(
+    `SELECT id, name FROM users WHERE role = 'sales' AND active = 1 ORDER BY id ASC`,
+  );
+  if (reps.length === 0) return { assigned: 0 };
+
+  const unassigned = await all<{ id: number; name: string; phone: string }>(
+    `SELECT id, name, phone FROM leads
+     WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'
+     ORDER BY created_at ASC`,
+  );
+  if (unassigned.length === 0) return { assigned: 0 };
+
+  await transaction(async () => {
+    for (let i = 0; i < unassigned.length; i++) {
+      const rep = reps[i % reps.length];
+      await run(
+        `UPDATE leads SET assigned_to = ?, assigned_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+        [rep.id, unassigned[i].id],
+      );
+    }
+  });
+
+  // Notify each rep
+  const countByRep: Record<number, number> = {};
+  for (let i = 0; i < unassigned.length; i++) {
+    const rep = reps[i % reps.length];
+    countByRep[rep.id] = (countByRep[rep.id] ?? 0) + 1;
+  }
+  for (const rep of reps) {
+    const count = countByRep[rep.id];
+    if (count) {
+      await notify(rep.id, `${count} lead${count > 1 ? 's' : ''} assigned to you`, 'Your lead list has been updated.');
+    }
+  }
+
+  if (actorId && unassigned.length > 0) {
+    await recordAudit(actorId, 'lead.split', 'lead', null, `Auto-assigned ${unassigned.length} unassigned leads to ${reps.length} reps`);
+  }
+
+  return { assigned: unassigned.length };
+}
+
 router.use(requireAuth);
 router.use(requireSuperAdmin);
 
