@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Users, CalendarClock } from 'lucide-react';
 import { useAuth } from '@/auth/auth';
 import { api } from '@/lib/api';
@@ -20,15 +20,18 @@ const PAGE_SIZE = 25;
 
 export function ClientsPage() {
   const { user } = useAuth();
-  const [status, setStatus] = useState('All');
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState<string>(() => searchParams.get('status') ?? 'All');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
   const isSales = user?.role === 'sales';
+  const isService = user?.role === 'service';
+  const usesOwnQueue = isSales || isService;
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: QUERY_KEYS.clients(isSales ? 'mine' : 'all'),
-    queryFn: () => api.get<{ clients: Client[] }>(isSales ? '/clients/mine' : '/clients'),
+    queryKey: QUERY_KEYS.clients(usesOwnQueue ? 'mine' : 'all'),
+    queryFn: () => api.get<{ clients: Client[] }>(usesOwnQueue ? '/clients/mine' : '/clients'),
   });
 
   const filtered = useMemo(() => {

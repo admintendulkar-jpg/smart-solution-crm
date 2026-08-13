@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Router } from 'express';
 import { z } from 'zod';
+import { config } from '../../config';
 import { requireAdminOrAbove, requireAuth, requireSalesOrAbove } from '../../auth/guards';
 import { BRANCHES, CALL_OUTCOMES, LEAD_SOURCES, LEAD_STATUSES, SETTINGS_KEYS, SERVICES } from '../../constants';
 import { all, get, run, transaction } from '../../db';
@@ -372,7 +375,9 @@ router.post(
         nextStatus = 'Not Interested';
         break;
       case 'Converted':
-        nextStatus = 'Converted';
+        // Conversion happens via POST /:id/convert — logging the outcome alone
+        // must not mark the lead converted, or the client record never gets created.
+        nextStatus = lead.status;
         break;
       default:
         nextStatus = lead.status;
@@ -453,7 +458,12 @@ router.post(
     const lead = assertLeadVisible(Number(req.params.id), user, true);
 
     if (lead.status === 'Converted') {
-      throw new AppError(409, 'This lead is already converted.', 'ALREADY_CONVERTED');
+      const existingClient = get<{ id: number }>('SELECT id FROM clients WHERE lead_id = ?', [lead.id]);
+      if (existingClient) {
+        throw new AppError(409, 'This lead is already converted.', 'ALREADY_CONVERTED');
+      }
+      // A legacy "Converted" status with no client record (e.g. a call outcome
+      // logged before conversion) is allowed through so the client gets created.
     }
 
     const slaDays = Number(getSetting(SETTINGS_KEYS.slaBusinessDays, '4')) || 4;
@@ -538,6 +548,84 @@ router.post(
     );
 
     res.status(201).json({ clientId, dueDate: dueDate.toISOString() });
+  }),
+);
+
+router.post(
+  '/:id/revert',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const lead = assertLeadVisible(Number(req.params.id), user, true);
+
+    if (lead.status !== 'Converted') {
+      throw new AppError(400, 'Only converted leads can be reverted.', 'NOT_CONVERTED');
+    }
+
+    const client = get<{ id: number; name: string; assigned_to: number | null }>(
+      'SELECT id, name, assigned_to FROM clients WHERE lead_id = ?',
+      [lead.id],
+    );
+
+    if (client) {
+      const payments = all<{ id: number; proof_path: string | null }>(
+        'SELECT id, proof_path FROM payments WHERE client_id = ?',
+        [client.id],
+      );
+      for (const payment of payments) {
+        if (payment.proof_path) {
+          try {
+            fs.unlinkSync(path.join(config.uploadDir, payment.proof_path));
+          } catch {
+            // proof file already gone — nothing to clean up
+          }
+        }
+      }
+      run('DELETE FROM payments WHERE client_id = ?', [client.id]);
+      run('DELETE FROM client_notes WHERE client_id = ?', [client.id]);
+      run('DELETE FROM clients WHERE id = ?', [client.id]);
+    }
+
+    const lastCall = get<{ outcome: string }>(
+      `SELECT outcome FROM call_logs WHERE lead_id = ? AND outcome != 'Converted' ORDER BY id DESC LIMIT 1`,
+      [lead.id],
+    );
+
+    let restored = 'New';
+    if (lastCall) {
+      switch (lastCall.outcome) {
+        case 'Call Back Later':
+          restored = 'Follow-up';
+          break;
+        case 'Connected':
+        case 'Not Answered':
+          restored = 'Attempting';
+          break;
+        case 'Not Interested':
+          restored = 'Not Interested';
+          break;
+      }
+    }
+
+    run(
+      "UPDATE leads SET status = ?, last_outcome = ?, updated_at = datetime('now') WHERE id = ?",
+      [restored, lastCall?.outcome ?? null, lead.id],
+    );
+
+    if (client?.assigned_to) {
+      notify(client.assigned_to, 'Client reverted', `${lead.name} was moved back to the sales queue.`, `/leads/${lead.id}`);
+    }
+
+    recordAudit(
+      user.id,
+      'lead.revert',
+      'lead',
+      lead.id,
+      client
+        ? `Reverted client #${client.id} — lead back to '${restored}'`
+        : `Reverted converted status — lead back to '${restored}'`,
+    );
+
+    res.json({ success: true, status: restored });
   }),
 );
 

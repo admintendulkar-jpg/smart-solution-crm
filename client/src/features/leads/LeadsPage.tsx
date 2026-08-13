@@ -119,6 +119,7 @@ export function LeadsPage() {
   const [page, setPage] = useState(1);
   const [dateFilter, setDateFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [repFilter, setRepFilter] = useState<string>(() => searchParams.get('rep') ?? '');
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const isSales = user?.role === 'sales';
@@ -126,7 +127,7 @@ export function LeadsPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: isSales
       ? QUERY_KEYS.myLeads(activeTab, search)
-      : ['leads', 'all', activeTab, search, dateFilter, priorityFilter, page],
+      : ['leads', 'all', activeTab, search, dateFilter, priorityFilter, repFilter, page],
     queryFn: () => {
       if (isSales) {
         const params = new URLSearchParams();
@@ -140,6 +141,7 @@ export function LeadsPage() {
       if (activeTab !== 'All') params.set('status', activeTab);
       if (search.trim()) params.set('search', search.trim());
       if (priorityFilter) params.set('priority', priorityFilter);
+      if (repFilter) params.set('rep', repFilter);
       const range = rangeFor(dateFilter);
       if (range.from) params.set('from', range.from);
       if (range.to) params.set('to', range.to);
@@ -240,6 +242,12 @@ export function LeadsPage() {
               <option value="">All priorities</option>
               {LEAD_PRIORITIES.map((p) => (
                 <option key={p} value={p}>{p}</option>
+              ))}
+            </Select>
+            <Select value={repFilter} onChange={(e) => { setRepFilter(e.target.value); setPage(1); }} style={{ width: 160 }}>
+              <option value="">All reps</option>
+              {reps?.users.map((u) => (
+                <option key={u.id} value={String(u.id)}>{u.name}</option>
               ))}
             </Select>
             {selected.size > 0 && (

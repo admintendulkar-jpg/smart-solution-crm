@@ -68,8 +68,8 @@ function AnimatedNumber({ value, delay = 0, format }: { value: number; delay?: n
   return <>{format ? format(display) : display}</>;
 }
 
-function StatCard({ label, value, sub, icon, color = 'var(--color-primary)' }: { label: string; value: React.ReactNode; sub?: string; icon: React.ReactNode; color?: string }) {
-  return (
+function StatCard({ label, value, sub, icon, color = 'var(--color-primary)', to }: { label: string; value: React.ReactNode; sub?: string; icon: React.ReactNode; color?: string; to?: string }) {
+  const card = (
     <div className="stat-card" style={{ borderLeftColor: color }}>
       <div className="stat-label">
         <span
@@ -87,10 +87,18 @@ function StatCard({ label, value, sub, icon, color = 'var(--color-primary)' }: {
       {sub && <div className="stat-sub">{sub}</div>}
     </div>
   );
+  if (to) {
+    return (
+      <Link to={to} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+        {card}
+      </Link>
+    );
+  }
+  return card;
 }
 
-function AnimatedStatCard({ label, value, sub, icon, color, delay }: { label: string; value: number; sub?: string; icon: React.ReactNode; color?: string; delay?: number }) {
-  return <StatCard label={label} value={<AnimatedNumber value={value} delay={delay ?? 0} />} sub={sub} icon={icon} color={color} />;
+function AnimatedStatCard({ label, value, sub, icon, color, delay, to }: { label: string; value: number; sub?: string; icon: React.ReactNode; color?: string; delay?: number; to?: string }) {
+  return <StatCard label={label} value={<AnimatedNumber value={value} delay={delay ?? 0} />} sub={sub} icon={icon} color={color} to={to} />;
 }
 
 function SalesDashboard() {
@@ -223,8 +231,8 @@ function AdminDashboard() {
     <>
       <PageHeader title="Overview" subtitle="Company-wide view across all branches." />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-        <AnimatedStatCard label="Open leads" value={totals.openLeads} sub={`${totals.unassigned} awaiting split`} icon={<Layers size={14} />} delay={0} />
-        <AnimatedStatCard label="New today" value={totals.leadsToday} sub="Imported & synced" icon={<ArrowUpRight size={14} />} color="var(--color-info)" delay={60} />
+        <AnimatedStatCard label="Open leads" value={totals.openLeads} sub={`${totals.unassigned} awaiting split`} icon={<Layers size={14} />} delay={0} to="/leads" />
+        <AnimatedStatCard label="New today" value={totals.leadsToday} sub="Imported & synced" icon={<ArrowUpRight size={14} />} color="var(--color-info)" delay={60} to="/leads" />
         <AnimatedStatCard
           label="Overdue follow-ups"
           value={totals.overdueFollowUps}
@@ -232,6 +240,7 @@ function AdminDashboard() {
           icon={<AlarmClock size={14} />}
           color={totals.overdueFollowUps > 0 ? 'var(--color-danger)' : 'var(--color-success)'}
           delay={120}
+          to="/leads?status=Follow-up"
         />
         <AnimatedStatCard
           label="Duplicate leads"
@@ -240,8 +249,9 @@ function AdminDashboard() {
           icon={<AlertTriangle size={14} />}
           color={totals.pendingDuplicates > 0 ? 'var(--color-warning)' : 'var(--color-success)'}
           delay={180}
+          to="/duplicates"
         />
-        <AnimatedStatCard label="Clients in progress" value={totals.clientsInProgress} sub={`${totals.clientsTotal} total clients`} icon={<Hourglass size={14} />} color="var(--color-info)" delay={240} />
+        <AnimatedStatCard label="Clients in progress" value={totals.clientsInProgress} sub={`${totals.clientsTotal} total clients`} icon={<Hourglass size={14} />} color="var(--color-info)" delay={240} to="/clients?status=In Progress" />
         <StatCard label="Revenue confirmed" value={<AnimatedNumber value={totals.revenueConfirmed} delay={300} format={formatINR} />} sub={`${totals.convertedToday} conversions today`} icon={<IndianRupee size={14} />} color="var(--color-success)" />
       </div>
 
@@ -265,7 +275,9 @@ function AdminDashboard() {
                 const rate = denominator > 0 ? Math.round((rep.converted / denominator) * 100) : 0;
                 return (
                   <tr key={rep.id}>
-                    <Td className="cell-strong">{rep.name}</Td>
+                    <Td className="cell-strong">
+                      <Link to={`/leads?rep=${rep.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{rep.name}</Link>
+                    </Td>
                     <Td className="cell-muted">{rep.branch}</Td>
                     <Td>{rep.assigned}</Td>
                     <Td>{rep.calls}</Td>
@@ -316,23 +328,25 @@ function AdminDashboard() {
                 const count = pipeline[status] ?? 0;
                 const pct = totalOpen > 0 ? (count / totalOpen) * 100 : 0;
                 return (
-                  <div key={status} style={{ marginBottom: 13 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 5 }}>
-                      <StatusTag status={status} />
-                      <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>{count}</span>
+                  <Link key={status} to={`/leads?status=${encodeURIComponent(status)}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+                    <div style={{ marginBottom: 13 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 5 }}>
+                        <StatusTag status={status} />
+                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>{count}</span>
+                      </div>
+                      <div style={{ height: 6, background: 'var(--color-grey-bg)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${pct}%`,
+                            borderRadius: 4,
+                            background: PIPELINE_COLORS[status],
+                            transition: 'width 300ms ease',
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div style={{ height: 6, background: 'var(--color-grey-bg)', borderRadius: 4, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${pct}%`,
-                          borderRadius: 4,
-                          background: PIPELINE_COLORS[status],
-                          transition: 'width 300ms ease',
-                        }}
-                      />
-                    </div>
-                  </div>
+                  </Link>
                 );
               })}
             </CardBody>

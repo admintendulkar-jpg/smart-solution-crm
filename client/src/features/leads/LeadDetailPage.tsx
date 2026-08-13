@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Phone,
@@ -17,6 +17,7 @@ import {
   Clock,
   Save,
   X,
+  Undo2,
 } from 'lucide-react';
 import { useAuth } from '@/auth/auth';
 import { api, errorMessage } from '@/lib/api';
@@ -135,10 +136,10 @@ function CallOutcomeModal({ leadId, onClose, onConvert }: { leadId: number; onCl
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadStats });
-      toast.success(`Call logged — lead moved to "${data.status}".`);
       if (payload.outcome === 'Converted') {
         onConvert();
       } else {
+        toast.success(`Call logged — lead moved to "${data.status}".`);
         onClose();
       }
     },
@@ -194,7 +195,7 @@ function CallOutcomeModal({ leadId, onClose, onConvert }: { leadId: number; onCl
         </div>
         <Field label="Outcome">
           <Select value={form.outcome} onChange={(e) => setForm({ ...form, outcome: e.target.value })}>
-            {CALL_OUTCOMES.map((o) => (
+            {CALL_OUTCOMES.filter((o) => o !== 'Converted').map((o) => (
               <option key={o} value={o}>{o}</option>
             ))}
           </Select>
@@ -263,7 +264,6 @@ function FollowUpModal({ leadId, onClose }: { leadId: number; onClose: () => voi
 function ConvertModal({ leadId, onClose }: { leadId: number; onClose: () => void }) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { user } = useAuth();
   const [service, setService] = useState(SERVICES[0]);
   const [packagePlan, setPackagePlan] = useState(PACKAGES[SERVICES[0]][0]);
   const [amount, setAmount] = useState('');
@@ -281,7 +281,7 @@ function ConvertModal({ leadId, onClose }: { leadId: number; onClose: () => void
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.post(`/leads/${leadId}/convert`, {
+      api.post<{ clientId: number }>(`/leads/${leadId}/convert`, {
         service,
         packagePlan,
         amount: Number(amount),
@@ -300,7 +300,10 @@ function ConvertModal({ leadId, onClose }: { leadId: number; onClose: () => void
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadStats });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clients(user?.role ?? '') });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clients('mine') });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clients('all') });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
       toast.success('Client created and assigned to the Service Team.');
       onClose();
     },
@@ -694,7 +697,6 @@ export function LeadDetailPage() {
   const { id } = useParams();
   const leadId = Number(id);
   const { user } = useAuth();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -746,6 +748,20 @@ export function LeadDetailPage() {
 
   const [assignTarget, setAssignTarget] = useState<number | null>(null);
 
+  const revertMutation = useMutation({
+    mutationFn: () => api.post(`/leads/${leadId}/revert`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadStats });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clients('mine') });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clients('all') });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
+      toast.success('Conversion reverted — the lead is back in the sales queue.');
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+
   if (isError) return <ErrorState error={isError} />;
   if (isLoading || !data) return <Spinner />;
 
@@ -757,13 +773,12 @@ export function LeadDetailPage() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => navigate(-1)}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 12.5, cursor: 'pointer', marginBottom: 14, padding: 0 }}
+      <Link
+        to="/leads"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 12.5, cursor: 'pointer', marginBottom: 14, padding: 0, textDecoration: 'none' }}
       >
         <ArrowLeft size={14} /> Back to leads
-      </button>
+      </Link>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -836,6 +851,20 @@ export function LeadDetailPage() {
                 ))}
               </Select>
             </div>
+          )}
+          {isConverted && (canAct || canAdmin) && (
+            <Button
+              variant="danger"
+              icon={<Undo2 size={14} />}
+              loading={revertMutation.isPending}
+              onClick={() => {
+                if (window.confirm('Revert this conversion? The client record, payments and notes will be removed and the lead returns to the sales queue.')) {
+                  revertMutation.mutate();
+                }
+              }}
+            >
+              Revert
+            </Button>
           )}
         </div>
       </div>
