@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdminOrAbove, requireAuth } from '../../auth/guards';
 import { ROLES, BRANCHES, ROLE_LABELS } from '../../constants';
-import { all, get, run } from '../../db';
+import { all, get, run, saveUserOverride } from '../../db';
 import { AppError, asyncHandler } from '../../errors';
 import { recordAudit } from '../audit';
 
@@ -150,6 +150,15 @@ router.patch(
 
     if (fields.length > 1) {
       await run(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [...params, id]);
+      saveUserOverride({
+        id,
+        name: body.name,
+        email: body.email !== undefined ? (body.email?.trim() || null) : undefined,
+        phone: body.phone,
+        role: body.role,
+        branch: body.branch,
+        active: body.active !== undefined ? (body.active ? 1 : 0) : undefined,
+      });
     }
 
     await recordAudit(

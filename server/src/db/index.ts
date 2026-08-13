@@ -250,6 +250,26 @@ export async function initializeSchema(): Promise<void> {
   await ensureRealUsers();
 }
 
+const OVERRIDE_FILE = path.join(config.dataDir, 'users_override.json');
+
+export function saveUserOverride(user: { id: number; name?: string; email?: string | null; phone?: string | null; role?: string; branch?: string; active?: number }): void {
+  try {
+    let overrides: Record<string, typeof user> = {};
+    if (fs.existsSync(OVERRIDE_FILE)) {
+      try {
+        overrides = JSON.parse(fs.readFileSync(OVERRIDE_FILE, 'utf8'));
+      } catch {
+        overrides = {};
+      }
+    }
+    const key = String(user.id);
+    overrides[key] = { ...(overrides[key] ?? {}), ...user };
+    fs.writeFileSync(OVERRIDE_FILE, JSON.stringify(overrides, null, 2), 'utf8');
+  } catch (err) {
+    logger.warn(`Failed to write user override: ${err}`);
+  }
+}
+
 export async function ensureRealUsers(): Promise<void> {
   const REAL_USERS = [
     { name: 'Tendulkar', email: 'admin.tendulkar@smartsolutionagency.in', phone: '7094523321', role: 'super_admin', branch: 'Coimbatore' },
@@ -263,7 +283,7 @@ export async function ensureRealUsers(): Promise<void> {
   ];
 
   for (const u of REAL_USERS) {
-    const existing = await get<{ id: number }>('SELECT id FROM users WHERE email = ? OR phone = ?', [u.email, u.phone]);
+    const existing = await get<{ id: number }>('SELECT id FROM users WHERE phone = ? OR (email IS NOT NULL AND email = ?)', [u.phone, u.email]);
     if (!existing) {
       await run(`INSERT INTO users (name, email, phone, role, branch, active) VALUES (?, ?, ?, ?, ?, 1)`, [
         u.name,
@@ -272,6 +292,33 @@ export async function ensureRealUsers(): Promise<void> {
         u.role,
         u.branch,
       ]);
+    }
+  }
+
+  // Re-apply any custom UI user edits saved across restarts
+  if (fs.existsSync(OVERRIDE_FILE)) {
+    try {
+      const overrides: Record<string, { id: number; name?: string; email?: string | null; phone?: string | null; role?: string; branch?: string; active?: number }> = JSON.parse(fs.readFileSync(OVERRIDE_FILE, 'utf8'));
+      for (const item of Object.values(overrides)) {
+        if (item.id || item.phone) {
+          const existing = await get<{ id: number }>('SELECT id FROM users WHERE id = ? OR phone = ?', [item.id ?? -1, item.phone ?? '-1']);
+          if (existing) {
+            const fields: string[] = [];
+            const params: unknown[] = [];
+            if (item.name !== undefined) { fields.push('name = ?'); params.push(item.name); }
+            if (item.email !== undefined) { fields.push('email = ?'); params.push(item.email); }
+            if (item.phone !== undefined) { fields.push('phone = ?'); params.push(item.phone); }
+            if (item.role !== undefined) { fields.push('role = ?'); params.push(item.role); }
+            if (item.branch !== undefined) { fields.push('branch = ?'); params.push(item.branch); }
+            if (item.active !== undefined) { fields.push('active = ?'); params.push(item.active); }
+            if (fields.length > 0) {
+              await run(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [...params, existing.id]);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(`Failed to re-apply user overrides: ${err}`);
     }
   }
 }
