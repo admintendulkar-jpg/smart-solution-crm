@@ -9,11 +9,11 @@ const DEFAULTS: Record<string, string> = {
   [SETTINGS_KEYS.slaBusinessDays]: '4',
 };
 
-export function ensureDefaultSettings(): void {
+export async function ensureDefaultSettings(): Promise<void> {
   for (const [key, value] of Object.entries(DEFAULTS)) {
-    const existing = get('SELECT value FROM settings WHERE key = ?', [key]);
+    const existing = await get('SELECT value FROM settings WHERE key = ?', [key]);
     if (!existing) {
-      run('INSERT INTO settings (key, value) VALUES (?, ?)', [key, value]);
+      await run('INSERT INTO settings (key, value) VALUES (?, ?)', [key, value]);
     }
   }
 }

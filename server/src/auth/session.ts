@@ -17,10 +17,10 @@ export function sessionTokenFrom(req: Request): string | null {
   return null;
 }
 
-export function createSession(userId: number): { token: string; expiresAt: string } {
+export async function createSession(userId: number): Promise<{ token: string; expiresAt: string }> {
   const token = randomToken(32);
   const expiresAt = addHours(new Date(), config.sessionIdleHours).toISOString();
-  run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [
+  await run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [
     sha256(token),
     userId,
     expiresAt,
@@ -56,7 +56,7 @@ export const authRoutes = {
   requestOtp: asyncHandler(async (req: Request, res: Response) => {
     const body = requestOtpSchema.parse(req.body);
 
-    const user = get<{ id: number; name: string }>(
+    const user = await get<{ id: number; name: string }>(
       `SELECT id, name FROM users
        WHERE ${body.identifierType === 'phone' ? 'phone' : 'email'} = ? AND active = 1`,
       [body.identifier],
@@ -71,16 +71,16 @@ export const authRoutes = {
 
   verifyOtp: asyncHandler(async (req: Request, res: Response) => {
     const body = verifyOtpSchema.parse(req.body);
-    const result = verifyOtp(body.identifier, body.otp);
+    const result = await verifyOtp(body.identifier, body.otp);
 
     if (!result.ok || !result.user) {
       throw new AppError(401, result.message, 'OTP_INVALID');
     }
 
-    const { token, expiresAt } = createSession(result.user.id);
+    const { token, expiresAt } = await createSession(result.user.id);
     setSessionCookie(res, token, expiresAt);
 
-    run('INSERT INTO audit_log (user_id, action, entity, detail) VALUES (?, ?, ?, ?)', [
+    await run('INSERT INTO audit_log (user_id, action, entity, detail) VALUES (?, ?, ?, ?)', [
       result.user.id,
       'auth.login',
       'user',
@@ -94,12 +94,12 @@ export const authRoutes = {
     res.json({ user: req.user });
   },
 
-  logout: (req: Request, res: Response): void => {
+  logout: asyncHandler(async (req: Request, res: Response) => {
     const token = sessionTokenFrom(req);
     if (token) {
-      run('DELETE FROM sessions WHERE token_hash = ?', [sha256(token)]);
+      await run('DELETE FROM sessions WHERE token_hash = ?', [sha256(token)]);
     }
     clearSessionCookie(res);
     res.json({ success: true });
-  },
+  }),
 };

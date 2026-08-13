@@ -24,7 +24,7 @@ router.get(
   '/settings',
   requireSuperAdmin,
   asyncHandler(async (_req, res) => {
-    const rows = all<{ key: string; value: string; updated_at: string }>(
+    const rows = await all<{ key: string; value: string; updated_at: string }>(
       'SELECT key, value, updated_at FROM settings WHERE key IN (' +
         ALL_SETTING_KEYS.map(() => '?').join(',') +
         ')',
@@ -51,14 +51,14 @@ router.put(
     }
 
     for (const [key, value] of entries) {
-      run(
+      await run(
         `INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, datetime('now'))
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = datetime('now')`,
         [key, value, me.id],
       );
     }
 
-    recordAudit(me.id, 'settings.update', 'settings', null, entries.map(([k, v]) => `${k}=${v}`).join(', '));
+    await recordAudit(me.id, 'settings.update', 'settings', null, entries.map(([k, v]) => `${k}=${v}`).join(', '));
     res.json({ success: true });
   }),
 );
@@ -81,7 +81,7 @@ router.get(
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const take = Math.min(Math.max(Number(limit) || 100, 1), 500);
 
-    const entries = all(
+    const entries = await all(
       `SELECT a.*, u.name AS user_name FROM audit_log a
        LEFT JOIN users u ON u.id = a.user_id
        ${where} ORDER BY a.id DESC LIMIT ?`,
@@ -99,10 +99,10 @@ router.get(
     today.setHours(0, 0, 0, 0);
     const todayStart = today.toISOString();
 
-    const count = (sql: string, params: unknown[] = []): number =>
-      get<{ c: number }>(sql, params)?.c ?? 0;
+    const count = async (sql: string, params: unknown[] = []): Promise<number> =>
+      (await get<{ c: number }>(sql, params))?.c ?? 0;
 
-    const reps = all<{ id: number; name: string; branch: string; assigned: number; calls: number; converted: number }>(
+    const reps = await all<{ id: number; name: string; branch: string; assigned: number; calls: number; converted: number }>(
       `SELECT u.id, u.name, u.branch,
          (SELECT COUNT(*) FROM leads l WHERE l.assigned_to = u.id AND l.status != 'Converted') AS assigned,
          (SELECT COUNT(*) FROM call_logs c WHERE c.user_id = u.id) AS calls,
@@ -111,7 +111,7 @@ router.get(
     );
 
     const pipeline: Record<string, number> = {};
-    for (const row of all<{ status: string; c: number }>(
+    for (const row of await all<{ status: string; c: number }>(
       `SELECT status, COUNT(*) AS c FROM leads WHERE status != 'Converted' GROUP BY status`,
     )) {
       pipeline[row.status] = row.c;
@@ -119,20 +119,21 @@ router.get(
 
     res.json({
       totals: {
-        openLeads: count(`SELECT COUNT(*) AS c FROM leads WHERE status != 'Converted'`),
-        leadsToday: count(`SELECT COUNT(*) AS c FROM leads WHERE created_at >= ?`, [todayStart]),
-        overdueFollowUps: count(
+        openLeads: await count(`SELECT COUNT(*) AS c FROM leads WHERE status != 'Converted'`),
+        leadsToday: await count(`SELECT COUNT(*) AS c FROM leads WHERE created_at >= ?`, [todayStart]),
+        overdueFollowUps: await count(
           `SELECT COUNT(*) AS c FROM leads WHERE status = 'Follow-up' AND follow_up_at < ?`,
           [new Date().toISOString()],
         ),
-        pendingDuplicates: count(`SELECT COUNT(*) AS c FROM leads WHERE is_duplicate = 1`),
-        unassigned: count(`SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'`),
-        clientsTotal: count(`SELECT COUNT(*) AS c FROM clients`),
-        clientsInProgress: count(`SELECT COUNT(*) AS c FROM clients WHERE status = 'In Progress'`),
-        revenueConfirmed: get<{ c: number }>(
-          `SELECT COALESCE(SUM(amount), 0) AS c FROM payments WHERE status = 'Confirmed'`,
-        )?.c ?? 0,
-        convertedToday: count(`SELECT COUNT(*) AS c FROM clients WHERE created_at >= ?`, [todayStart]),
+        pendingDuplicates: await count(`SELECT COUNT(*) AS c FROM leads WHERE is_duplicate = 1`),
+        unassigned: await count(`SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'`),
+        clientsTotal: await count(`SELECT COUNT(*) AS c FROM clients`),
+        clientsInProgress: await count(`SELECT COUNT(*) AS c FROM clients WHERE status = 'In Progress'`),
+        revenueConfirmed:
+          (await get<{ c: number }>(
+            `SELECT COALESCE(SUM(amount), 0) AS c FROM payments WHERE status = 'Confirmed'`,
+          ))?.c ?? 0,
+        convertedToday: await count(`SELECT COUNT(*) AS c FROM clients WHERE created_at >= ?`, [todayStart]),
       },
       reps,
       pipeline,
@@ -143,13 +144,14 @@ router.get(
 router.get(
   '/notifications',
   asyncHandler(async (req, res) => {
-    const notifications = all(
+    const notifications = await all(
       `SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
       [req.user!.id],
     );
-    const unread = get<{ c: number }>('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read = 0', [
-      req.user!.id,
-    ])?.c ?? 0;
+    const unread =
+      (await get<{ c: number }>('SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read = 0', [
+        req.user!.id,
+      ]))?.c ?? 0;
     res.json({ notifications, unread });
   }),
 );
@@ -157,7 +159,7 @@ router.get(
 router.post(
   '/notifications/read-all',
   asyncHandler(async (req, res) => {
-    markAllRead(req.user!.id);
+    await markAllRead(req.user!.id);
     res.json({ success: true });
   }),
 );
@@ -203,14 +205,14 @@ router.get(
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const rows = all<Record<string, unknown>>(
+    const rows = await all<Record<string, unknown>>(
       `SELECT l.*, u.name AS assigned_name FROM leads l
        LEFT JOIN users u ON u.id = l.assigned_to
        ${where} ORDER BY l.created_at DESC`,
       params,
     );
 
-    recordAudit(req.user!.id, 'export.leads', 'lead', null, `${rows.length} rows`);
+    await recordAudit(req.user!.id, 'export.leads', 'lead', null, `${rows.length} rows`);
     csvDownload(
       res,
       `leads-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -241,7 +243,7 @@ router.get(
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const rows = all<Record<string, unknown>>(
+    const rows = await all<Record<string, unknown>>(
       `SELECT c.*, s.name AS sales_name, sv.name AS service_name,
          COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.client_id = c.id AND p.status = 'Confirmed'), 0) AS paid_amount
        FROM clients c
@@ -251,7 +253,7 @@ router.get(
       params,
     );
 
-    recordAudit(req.user!.id, 'export.clients', 'client', null, `${rows.length} rows`);
+    await recordAudit(req.user!.id, 'export.clients', 'client', null, `${rows.length} rows`);
     csvDownload(
       res,
       `clients-${new Date().toISOString().slice(0, 10)}.csv`,

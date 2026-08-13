@@ -256,23 +256,23 @@ interface OtpState {
   [key: string]: unknown;
 }
 
-function findOtpState(identifier: string): OtpState | undefined {
+async function findOtpState(identifier: string): Promise<OtpState | undefined> {
   return get<OtpState>('SELECT * FROM otp_requests WHERE identifier = ? ORDER BY id DESC LIMIT 1', [identifier]);
 }
 
-function deleteOtpState(identifier: string): void {
-  run('DELETE FROM otp_requests WHERE identifier = ?', [identifier]);
+async function deleteOtpState(identifier: string): Promise<void> {
+  await run('DELETE FROM otp_requests WHERE identifier = ?', [identifier]);
 }
 
-function issueOtp(identifier: string, identifierType: 'phone' | 'email', name: string): Promise<void> {
+async function issueOtp(identifier: string, identifierType: 'phone' | 'email', name: string): Promise<void> {
   const otp = randomOtp(6);
   const now = new Date();
-  run(
+  await run(
     `INSERT INTO otp_requests (identifier, identifier_type, otp_hash, expires_at, last_sent_at)
      VALUES (?, ?, ?, ?, ?)`,
     [identifier, identifierType, sha256(otp), addMinutes(now, config.otp.validityMin).toISOString(), now.toISOString()],
   );
-  return provider().send(identifier, identifierType, otp, name);
+  await provider().send(identifier, identifierType, otp, name);
 }
 
 export interface RequestOtpResult {
@@ -285,7 +285,7 @@ export async function requestOtp(
   identifierType: 'phone' | 'email',
   name: string,
 ): Promise<RequestOtpResult> {
-  const state = findOtpState(identifier);
+  const state = await findOtpState(identifier);
 
   if (state?.locked_until && isPast(state.locked_until) === false) {
     const minutesLeft = Math.ceil((new Date(state.locked_until).getTime() - Date.now()) / 60_000);
@@ -298,7 +298,7 @@ export async function requestOtp(
       const secondsLeft = Math.ceil(config.otp.resendCooldownSec - elapsed);
       return { ok: false, message: `Please wait ${secondsLeft}s before requesting a new OTP.` };
     }
-    deleteOtpState(identifier);
+    await deleteOtpState(identifier);
   }
 
   await issueOtp(identifier, identifierType, name);
@@ -311,8 +311,8 @@ export interface VerifyOtpResult {
   user?: { id: number; name: string; role: string };
 }
 
-export function verifyOtp(identifier: string, otp: string): VerifyOtpResult {
-  const state = findOtpState(identifier);
+export async function verifyOtp(identifier: string, otp: string): Promise<VerifyOtpResult> {
+  const state = await findOtpState(identifier);
 
   if (!state) {
     return { ok: false, message: 'No OTP requested. Request a new OTP first.' };
@@ -321,33 +321,33 @@ export function verifyOtp(identifier: string, otp: string): VerifyOtpResult {
     return { ok: false, message: 'Account temporarily locked. Try again later.' };
   }
   if (isPast(state.expires_at)) {
-    deleteOtpState(identifier);
+    await deleteOtpState(identifier);
     return { ok: false, message: 'OTP expired. Request a new one.' };
   }
 
   if (sha256(otp) !== state.otp_hash) {
     const attempts = state.attempts + 1;
     if (attempts >= config.otp.maxAttempts) {
-      run(
+      await run(
         `UPDATE otp_requests SET attempts = ?, locked_until = ? WHERE identifier = ?`,
         [attempts, addMinutes(new Date(), config.otp.lockoutMin).toISOString(), identifier],
       );
       return { ok: false, message: `Too many wrong attempts. Locked for ${config.otp.lockoutMin} minutes.` };
     }
-    run('UPDATE otp_requests SET attempts = ? WHERE identifier = ?', [attempts, identifier]);
+    await run('UPDATE otp_requests SET attempts = ? WHERE identifier = ?', [attempts, identifier]);
     const remaining = config.otp.maxAttempts - attempts;
     return { ok: false, message: `Incorrect OTP. ${remaining} attempt${remaining === 1 ? '' : 's'} left.` };
   }
 
-  const user = get<{ id: number; name: string; role: string }>(
+  const user = await get<{ id: number; name: string; role: string }>(
     'SELECT id, name, role FROM users WHERE (phone = ? OR email = ?) AND active = 1',
     [identifier, identifier],
   );
   if (!user) {
-    deleteOtpState(identifier);
+    await deleteOtpState(identifier);
     return { ok: false, message: 'No active account linked to this identifier.' };
   }
 
-  deleteOtpState(identifier);
+  await deleteOtpState(identifier);
   return { ok: true, message: 'Verified', user };
 }

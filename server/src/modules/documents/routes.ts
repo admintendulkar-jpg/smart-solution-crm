@@ -45,7 +45,7 @@ router.get(
 
     // Check Employee Documents
     if (!isAuthorized) {
-      const empDoc = get<{ user_id: number }>(
+      const empDoc = await get<{ user_id: number }>(
         'SELECT user_id FROM employee_documents WHERE file_path = ? OR file_path LIKE ?',
         [safeFilename, `%${safeFilename}`],
       );
@@ -58,7 +58,7 @@ router.get(
 
     // Check Payment Proofs
     if (!isAuthorized) {
-      const paymentProof = get<{ client_id: number; sales_person_id: number | null; assigned_to: number | null }>(
+      const paymentProof = await get<{ client_id: number; sales_person_id: number | null; assigned_to: number | null }>(
         `SELECT p.id, c.sales_person_id, c.assigned_to 
          FROM payments p 
          JOIN clients c ON c.id = p.client_id 
@@ -77,7 +77,7 @@ router.get(
 
     // Check General Entity Documents
     if (!isAuthorized) {
-      const entityDoc = get<{ entity_type: string; entity_id: number; uploaded_by: number | null }>(
+      const entityDoc = await get<{ entity_type: string; entity_id: number; uploaded_by: number | null }>(
         'SELECT entity_type, entity_id, uploaded_by FROM documents WHERE stored_name = ?',
         [safeFilename],
       );
@@ -85,7 +85,7 @@ router.get(
         if (entityDoc.uploaded_by === user.id) {
           isAuthorized = true;
         } else if (entityDoc.entity_type === 'client') {
-          const client = get<{ sales_person_id: number | null; assigned_to: number | null }>(
+          const client = await get<{ sales_person_id: number | null; assigned_to: number | null }>(
             'SELECT sales_person_id, assigned_to FROM clients WHERE id = ?',
             [entityDoc.entity_id],
           );

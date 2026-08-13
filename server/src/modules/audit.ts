@@ -1,13 +1,13 @@
 import { run } from '../db';
 
-export function recordAudit(
+export async function recordAudit(
   userId: number | null,
   action: string,
   entity?: string | null,
   entityId?: number | null,
   detail?: string | null,
-): void {
-  run('INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES (?, ?, ?, ?, ?)', [
+): Promise<void> {
+  await run('INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES (?, ?, ?, ?, ?)', [
     userId,
     action,
     entity ?? null,

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { config } from '../config';
 import { get, run } from '../db';
-import { AppError } from '../errors';
+import { AppError, asyncHandler } from '../errors';
 import type { AuthUser } from '../types';
 import { sha256 } from '../utils/crypto';
 import { addHours, isPast } from '../utils/time';
@@ -9,13 +9,13 @@ import { sessionTokenFrom } from './session';
 
 const SESSION_COOKIE = 'sscrm_session';
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
+export const requireAuth = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
   const token = sessionTokenFrom(req);
   if (!token) {
     throw new AppError(401, 'Authentication required.', 'UNAUTHORIZED');
   }
 
-  const row = get<{ token_hash: string; user_id: number; expires_at: string }>(
+  const row = await get<{ token_hash: string; user_id: number; expires_at: string }>(
     'SELECT * FROM sessions WHERE token_hash = ?',
     [sha256(token)],
   );
@@ -23,7 +23,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     throw new AppError(401, 'Session expired. Please log in again.', 'UNAUTHORIZED');
   }
 
-  const user = get<AuthUser>(
+  const user = await get<AuthUser>(
     `SELECT id, name, email, phone, role, branch FROM users WHERE id = ? AND active = 1`,
     [row.user_id],
   );
@@ -32,7 +32,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   }
 
   const newExpiry = addHours(new Date(), config.sessionIdleHours).toISOString();
-  run('UPDATE sessions SET expires_at = ?, last_seen_at = ? WHERE token_hash = ?', [
+  await run('UPDATE sessions SET expires_at = ?, last_seen_at = ? WHERE token_hash = ?', [
     newExpiry,
     new Date().toISOString(),
     row.token_hash,
@@ -40,7 +40,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
 
   req.user = user;
   next();
-}
+});
 
 export function requireRoles(...roles: AuthUser['role'][]): (req: Request, _res: Response, next: NextFunction) => void {
   return (req: Request, _res: Response, next: NextFunction): void => {

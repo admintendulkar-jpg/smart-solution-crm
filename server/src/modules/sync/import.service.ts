@@ -21,19 +21,19 @@ export interface ImportResult {
   duplicateDetails: { name: string; phone: string; matches: string }[];
 }
 
-export function importLeads(
+export async function importLeads(
   rows: IncomingLead[],
   fileName: string,
   sourceLabel: string,
   actorId: number | null,
-): ImportResult {
+): Promise<ImportResult> {
   const defaultBranch =
-    get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.defaultBranch])?.value ??
-    'Coimbatore';
+    (await get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.defaultBranch]))
+      ?.value ?? 'Coimbatore';
 
   const result: ImportResult = { total: rows.length, imported: 0, duplicates: 0, errors: 0, duplicateDetails: [] };
 
-  transaction(() => {
+  await transaction(async () => {
     for (const row of rows) {
       const phone = row.phone.replace(/[^0-9+]/g, '');
       const email = row.email?.trim().toLowerCase() || null;
@@ -43,7 +43,7 @@ export function importLeads(
       }
 
       if (row.externalKey) {
-        const sameSourceRow = get<{ id: number }>(
+        const sameSourceRow = await get<{ id: number }>(
           `SELECT id FROM leads WHERE external_key = ? LIMIT 1`,
           [row.externalKey],
         );
@@ -54,13 +54,13 @@ export function importLeads(
         }
       }
 
-      const existing = get<{ id: number; name: string }>(
+      const existing = await get<{ id: number; name: string }>(
         `SELECT id, name FROM leads WHERE phone = ? OR (email IS NOT NULL AND ? IS NOT NULL AND email = ?) LIMIT 1`,
         [phone, email, email],
       );
 
       if (existing) {
-        run(
+        await run(
           `INSERT INTO leads (external_key, name, phone, email, whatsapp, source, service, branch,
              is_duplicate, duplicate_of, imported_batch)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NULL)`,
@@ -81,7 +81,7 @@ export function importLeads(
         continue;
       }
 
-      run(
+      await run(
         `INSERT INTO leads (external_key, name, phone, email, whatsapp, source, service, branch,
            imported_batch)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
@@ -99,7 +99,7 @@ export function importLeads(
       result.imported += 1;
     }
 
-    run(
+    await run(
       `INSERT INTO lead_batches (file_name, source, status, total, imported, duplicates, errors, uploaded_by)
        VALUES (?, ?, 'Imported', ?, ?, ?, ?, ?)`,
       [fileName, sourceLabel, result.total, result.imported, result.duplicates, result.errors, actorId],
@@ -107,14 +107,14 @@ export function importLeads(
   });
 
   if (result.imported > 0) {
-    notifyRole(
+    await notifyRole(
       'sales',
       `${result.imported} new leads available`,
       `New leads were synced from ${sourceLabel}. They will be split by the owner.`,
     );
   }
 
-  recordAudit(
+  await recordAudit(
     actorId,
     'lead.import',
     'lead',
@@ -125,14 +125,16 @@ export function importLeads(
   return result;
 }
 
-export function lastBatch(): { id: number; file_name: string; source: string; status: string; total: number; imported: number; duplicates: number; created_at: string } | undefined {
+export async function lastBatch(): Promise<
+  { id: number; file_name: string; source: string; status: string; total: number; imported: number; duplicates: number; created_at: string } | undefined
+> {
   return get(
     `SELECT id, file_name, source, status, total, imported, duplicates, created_at
      FROM lead_batches ORDER BY id DESC LIMIT 1`,
   );
 }
 
-export function listBatches(limit = 50): unknown[] {
+export async function listBatches(limit = 50): Promise<unknown[]> {
   return all(
     `SELECT b.*, u.name AS uploaded_by_name
      FROM lead_batches b LEFT JOIN users u ON u.id = b.uploaded_by

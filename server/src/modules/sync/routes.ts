@@ -64,7 +64,7 @@ router.post(
       service: cells[serviceCol]?.trim() || undefined,
     }));
 
-    const result = importLeads(incoming, req.file.originalname, 'CSV Upload', req.user!.id);
+    const result = await importLeads(incoming, req.file.originalname, 'CSV Upload', req.user!.id);
     res.status(201).json(result);
   }),
 );
@@ -72,7 +72,7 @@ router.post(
 router.get(
   '/import/batches',
   asyncHandler(async (_req, res) => {
-    res.json({ batches: listBatches() });
+    res.json({ batches: await listBatches() });
   }),
 );
 
@@ -98,7 +98,7 @@ router.post(
       throw new AppError(409, 'Google Sheets is not configured on this server.', 'SHEETS_NOT_CONFIGURED');
     }
     const rows = await adapter.fetchLeads();
-    const result = importLeads(rows, `sheets-${Date.now()}`, 'Google Sheets', req.user!.id);
+    const result = await importLeads(rows, `sheets-${Date.now()}`, 'Google Sheets', req.user!.id);
     res.json(result);
   }),
 );
@@ -115,9 +115,9 @@ export function startSheetSyncScheduler(): void {
   cron.schedule(pattern, () => {
     getAdapter()
       .fetchLeads()
-      .then((rows) => {
+      .then(async (rows) => {
         if (rows.length > 0) {
-          const result = importLeads(rows, `sheets-${Date.now()}`, 'Google Sheets', null);
+          const result = await importLeads(rows, `sheets-${Date.now()}`, 'Google Sheets', null);
           logger.info(`Scheduled sheets sync: ${result.imported} imported, ${result.duplicates} duplicates`);
         }
       })

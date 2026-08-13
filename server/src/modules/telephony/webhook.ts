@@ -20,10 +20,10 @@ export async function handleExotelWebhook(req: Request, res: Response): Promise<
   // Locate existing call record by Exotel Call SID or CustomField call_log ID
   let record: CallLogRecord | undefined;
   if (customField && Number.isInteger(Number(customField))) {
-    record = get<CallLogRecord>('SELECT * FROM call_logs WHERE id = ?', [Number(customField)]);
+    record = await get<CallLogRecord>('SELECT * FROM call_logs WHERE id = ?', [Number(customField)]);
   }
   if (!record && sid) {
-    record = get<CallLogRecord>('SELECT * FROM call_logs WHERE exotel_call_sid = ?', [sid]);
+    record = await get<CallLogRecord>('SELECT * FROM call_logs WHERE exotel_call_sid = ?', [sid]);
   }
 
   if (!record) {
@@ -55,18 +55,18 @@ export async function handleExotelWebhook(req: Request, res: Response): Promise<
     params.push(sid);
   }
 
-  run(`UPDATE call_logs SET ${fields.join(', ')} WHERE id = ?`, [...params, record.id]);
+  await run(`UPDATE call_logs SET ${fields.join(', ')} WHERE id = ?`, [...params, record.id]);
 
   // Update lead status if lead call and answered
   if (record.lead_id && (mapped.outcome === 'Connected' || mapped.outcome === 'Not Answered')) {
-    const lead = get<{ status: string }>('SELECT status FROM leads WHERE id = ?', [record.lead_id]);
+    const lead = await get<{ status: string }>('SELECT status FROM leads WHERE id = ?', [record.lead_id]);
     if (lead && lead.status === 'New') {
-      run("UPDATE leads SET status = 'Attempting', last_call_at = datetime('now'), last_outcome = ? WHERE id = ?", [mapped.outcome, record.lead_id]);
+      await run("UPDATE leads SET status = 'Attempting', last_call_at = datetime('now'), last_outcome = ? WHERE id = ?", [mapped.outcome, record.lead_id]);
     }
   }
 
   // Trigger in-app notification to agent
-  notify(
+  await notify(
     record.user_id,
     'Call Completed',
     `Call to ${record.customer_phone} status: ${mapped.crmStatus}${durationSec ? ` (${durationSec}s)` : ''}`,

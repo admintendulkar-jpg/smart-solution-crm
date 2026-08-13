@@ -11,15 +11,15 @@ import { notify } from '../notifications';
 
 const router = Router();
 
-function getQuota(): number {
-  const raw = get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.dailyLeadQuota])
+async function getQuota(): Promise<number> {
+  const raw = (await get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.dailyLeadQuota]))
     ?.value;
   const quota = raw ? Number(raw) : config.dailyLeadQuota;
   return Number.isFinite(quota) && quota > 0 ? Math.floor(quota) : config.dailyLeadQuota;
 }
 
-function getSplitEnabled(): boolean {
-  const raw = get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.leadSplitEnabled])
+async function getSplitEnabled(): Promise<boolean> {
+  const raw = (await get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.leadSplitEnabled]))
     ?.value;
   return raw === 'true';
 }
@@ -31,7 +31,7 @@ interface RepWithLoad {
   [key: string]: unknown;
 }
 
-function repLoads(): RepWithLoad[] {
+async function repLoads(): Promise<RepWithLoad[]> {
   const todayStart = startOfDayLocal(new Date()).toISOString();
   return all<RepWithLoad>(
     `SELECT u.id, u.name, COUNT(l.id) AS load
@@ -44,11 +44,12 @@ function repLoads(): RepWithLoad[] {
   );
 }
 
-function splitSummary(): { reps: RepWithLoad[]; pool: number; quota: number; enabled: boolean } {
-  const pool = get<{ c: number }>(
-    `SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'`,
-  )?.c ?? 0;
-  return { reps: repLoads(), pool, quota: getQuota(), enabled: getSplitEnabled() };
+async function splitSummary(): Promise<{ reps: RepWithLoad[]; pool: number; quota: number; enabled: boolean }> {
+  const pool =
+    (await get<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'`,
+    ))?.c ?? 0;
+  return { reps: await repLoads(), pool, quota: await getQuota(), enabled: await getSplitEnabled() };
 }
 
 router.use(requireAuth);
@@ -67,11 +68,11 @@ router.post(
     const body = z.object({ count: z.number().int().min(1).optional() }).parse(req.body ?? {});
     const user = req.user!;
 
-    if (!getSplitEnabled()) {
+    if (!(await getSplitEnabled())) {
       throw new AppError(409, 'Lead split is disabled in settings. Enable it first.', 'SPLIT_DISABLED');
     }
 
-    const { reps, quota } = splitSummary();
+    const { reps, quota } = await splitSummary();
     if (reps.length === 0) {
       throw new AppError(409, 'No active sales reps found.', 'NO_SALES_REPS');
     }
@@ -81,7 +82,7 @@ router.post(
     let round = 0;
     const assignments: Record<number, string[]> = {};
 
-    transaction(() => {
+    await transaction(async () => {
       for (const rep of reps) {
         assignments[rep.id] = [];
       }
@@ -92,13 +93,13 @@ router.post(
           if (round >= reps.length * 2) break;
           continue;
         }
-        const lead = get<{ id: number; name: string; phone: string }>(
+        const lead = await get<{ id: number; name: string; phone: string }>(
           `SELECT id, name, phone FROM leads
            WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'
            ORDER BY created_at ASC LIMIT 1`,
         );
         if (!lead) break;
-        run(
+        await run(
           "UPDATE leads SET assigned_to = ?, assigned_at = ?, updated_at = datetime('now') WHERE id = ?",
           [rep.id, nowIso(), lead.id],
         );
@@ -112,13 +113,13 @@ router.post(
 
     for (const [repId, leads] of Object.entries(assignments)) {
       if (leads.length > 0) {
-        notify(Number(repId), `${leads.length} new lead${leads.length > 1 ? 's' : ''} assigned`, leads.slice(0, 5).join(', '));
+        await notify(Number(repId), `${leads.length} new lead${leads.length > 1 ? 's' : ''} assigned`, leads.slice(0, 5).join(', '));
       }
     }
 
-    recordAudit(user.id, 'lead.split', 'lead', null, `Auto-split assigned ${assigned} lead(s)`);
+    await recordAudit(user.id, 'lead.split', 'lead', null, `Auto-split assigned ${assigned} lead(s)`);
 
-    res.json({ assigned, summary: splitSummary() });
+    res.json({ assigned, summary: await splitSummary() });
   }),
 );
 

@@ -49,132 +49,143 @@ function hoursFromNow(hours: number): string {
   return new Date(Date.now() + hours * 3_600_000).toISOString();
 }
 
-initializeSchema();
-ensureDefaultSettings();
+async function main(): Promise<void> {
+  await initializeSchema();
+  await ensureDefaultSettings();
 
-const userCount = get<{ c: number }>('SELECT COUNT(*) AS c FROM users')?.c ?? 0;
-if (userCount > 0) {
-  logger.info(`Seed skipped: ${userCount} user(s) already exist.`);
-  process.exit(0);
-}
-
-for (const user of USERS) {
-  run('INSERT INTO users (name, email, phone, role, branch) VALUES (?, ?, ?, ?, ?)', [
-    user.name, user.email, user.phone, user.role, user.branch,
-  ]);
-}
-logger.info(`Seeded ${USERS.length} users`);
-
-const salesReps = [3, 4, 5, 6];
-const salesBranch: Record<number, string> = { 3: 'Coimbatore', 4: 'Coimbatore', 5: 'Bangalore', 6: 'Bangalore' };
-
-let seed = 0;
-for (let i = 0; i < 60; i += 1) {
-  const name = `${random(FIRST_NAMES)} ${random(LAST_NAMES)}`;
-  const phone = randomPhone();
-  const source = random(SOURCES);
-  const service = random(SERVICES);
-  const rep = random(salesReps);
-
-  let status = 'New';
-  let followUpAt: string | null = null;
-  let lastOutcome: string | null = null;
-  let assignedTo: number | null = rep;
-
-  const roll = Math.random();
-  if (roll < 0.2) {
-    status = 'Attempting';
-    lastOutcome = 'Not Answered';
-  } else if (roll < 0.4) {
-    status = 'Follow-up';
-    lastOutcome = 'Call Back Later';
-    followUpAt = roll < 0.35 ? hoursFromNow(2 + Math.random() * 24) : daysAgoIso(1 + Math.floor(Math.random() * 3));
-  } else if (roll < 0.45) {
-    status = 'Not Interested';
-    lastOutcome = 'Not Interested';
-  } else if (roll < 0.52) {
-    status = 'Converted';
-    lastOutcome = 'Converted';
+  const userCount = (await get<{ c: number }>('SELECT COUNT(*) AS c FROM users'))?.c ?? 0;
+  if (userCount > 0) {
+    logger.info(`Seed skipped: ${userCount} user(s) already exist.`);
+    process.exit(0);
   }
 
-  const assignedAt = daysAgoIso(Math.floor(Math.random() * 10));
-  const createdAt = assignedAt;
-  const leadId = run(
-    `INSERT INTO leads (external_key, name, phone, email, whatsapp, source, service, branch,
-       status, assigned_to, assigned_at, follow_up_at, last_call_at, last_outcome, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      `seed-${i}`,
-      name,
-      phone,
-      `${name.toLowerCase().replace(/[^a-z]/g, '.')}${seed}@gmail.com`,
-      phone,
-      source,
-      service,
-      salesBranch[rep],
-      status,
-      assignedTo,
-      assignedAt,
-      followUpAt,
-      status === 'New' ? null : daysAgoIso(Math.floor(Math.random() * 5)),
-      lastOutcome,
-      createdAt,
-      createdAt,
-    ],
-  ).lastInsertRowid;
-  seed += 1;
-
-  if (status !== 'New') {
-    run('INSERT INTO call_logs (lead_id, user_id, outcome, duration_sec, note, created_at) VALUES (?, ?, ?, ?, ?, ?)', [
-      leadId,
-      rep,
-      lastOutcome ?? 'Connected',
-      Math.floor(30 + Math.random() * 300),
-      ['Asked about resume format', 'Interested in ATS package', 'Wants to call back after office hours', 'Asked pricing', 'Quiet, checking with family'][Math.floor(Math.random() * 5)],
-      daysAgoIso(Math.floor(Math.random() * 6)),
+  for (const user of USERS) {
+    await run('INSERT INTO users (name, email, phone, role, branch) VALUES (?, ?, ?, ?, ?)', [
+      user.name, user.email, user.phone, user.role, user.branch,
     ]);
   }
+  logger.info(`Seeded ${USERS.length} users`);
 
-  if (status === 'Converted') {
-    const amount = [999, 1499, 2499, 3999, 5999][Math.floor(Math.random() * 5)];
-    const paid = Math.random() < 0.7;
-    const clientId = run(
-      `INSERT INTO clients (lead_id, name, phone, email, whatsapp, service, package_plan, amount,
-         payment_status, source, sales_person_id, status, due_date, guarantee_status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        leadId,
-        name,
-        phone,
-        `${name.toLowerCase().replace(/[^a-z]/g, '.')}${seed}@gmail.com`,
-        phone,
-        service,
-        service === 'ATS Resume' ? 'ATS Resume - Standard' : service === 'Job Support' ? 'Job Support - 3 Months' : 'Basic',
-        amount,
-        paid ? 'Paid' : 'Pending',
-        source,
-        rep,
-        paid ? (Math.random() < 0.4 ? 'Delivered' : 'In Progress') : 'In Progress',
-        hoursFromNow(24 + Math.random() * 24),
-        Math.random() < 0.8 ? 'Guarantee Active' : 'Guarantee Fulfilled',
-        createdAt,
-        createdAt,
-      ],
+  const salesReps = [3, 4, 5, 6];
+  const salesBranch: Record<number, string> = { 3: 'Coimbatore', 4: 'Coimbatore', 5: 'Bangalore', 6: 'Bangalore' };
+
+  let seed = 0;
+  for (let i = 0; i < 60; i += 1) {
+    const name = `${random(FIRST_NAMES)} ${random(LAST_NAMES)}`;
+    const phone = randomPhone();
+    const source = random(SOURCES);
+    const service = random(SERVICES);
+    const rep = random(salesReps);
+
+    let status = 'New';
+    let followUpAt: string | null = null;
+    let lastOutcome: string | null = null;
+    let assignedTo: number | null = rep;
+
+    const roll = Math.random();
+    if (roll < 0.2) {
+      status = 'Attempting';
+      lastOutcome = 'Not Answered';
+    } else if (roll < 0.4) {
+      status = 'Follow-up';
+      lastOutcome = 'Call Back Later';
+      followUpAt = roll < 0.35 ? hoursFromNow(2 + Math.random() * 24) : daysAgoIso(1 + Math.floor(Math.random() * 3));
+    } else if (roll < 0.45) {
+      status = 'Not Interested';
+      lastOutcome = 'Not Interested';
+    } else if (roll < 0.52) {
+      status = 'Converted';
+      lastOutcome = 'Converted';
+    }
+
+    const assignedAt = daysAgoIso(Math.floor(Math.random() * 10));
+    const createdAt = assignedAt;
+    const leadId = (
+      await run(
+        `INSERT INTO leads (external_key, name, phone, email, whatsapp, source, service, branch,
+           status, assigned_to, assigned_at, follow_up_at, last_call_at, last_outcome, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          `seed-${i}`,
+          name,
+          phone,
+          `${name.toLowerCase().replace(/[^a-z]/g, '.')}${seed}@gmail.com`,
+          phone,
+          source,
+          service,
+          salesBranch[rep],
+          status,
+          assignedTo,
+          assignedAt,
+          followUpAt,
+          status === 'New' ? null : daysAgoIso(Math.floor(Math.random() * 5)),
+          lastOutcome,
+          createdAt,
+          createdAt,
+        ],
+      )
     ).lastInsertRowid;
+    seed += 1;
 
-    if (paid) {
-      run(
-        `INSERT INTO payments (client_id, amount, method, gateway_ref, status, created_at)
-         VALUES (?, ?, 'Gateway', ?, 'Confirmed', ?)`,
-        [clientId, amount, `pay_${leadId}${Math.floor(Math.random() * 9999)}`, daysAgoIso(Math.floor(Math.random() * 4))],
-      );
+    if (status !== 'New') {
+      await run('INSERT INTO call_logs (lead_id, user_id, outcome, duration_sec, note, created_at) VALUES (?, ?, ?, ?, ?, ?)', [
+        leadId,
+        rep,
+        lastOutcome ?? 'Connected',
+        Math.floor(30 + Math.random() * 300),
+        ['Asked about resume format', 'Interested in ATS package', 'Wants to call back after office hours', 'Asked pricing', 'Quiet, checking with family'][Math.floor(Math.random() * 5)],
+        daysAgoIso(Math.floor(Math.random() * 6)),
+      ]);
+    }
+
+    if (status === 'Converted') {
+      const amount = [999, 1499, 2499, 3999, 5999][Math.floor(Math.random() * 5)];
+      const paid = Math.random() < 0.7;
+      const clientId = (
+        await run(
+          `INSERT INTO clients (lead_id, name, phone, email, whatsapp, service, package_plan, amount,
+             payment_status, source, sales_person_id, status, due_date, guarantee_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            leadId,
+            name,
+            phone,
+            `${name.toLowerCase().replace(/[^a-z]/g, '.')}${seed}@gmail.com`,
+            phone,
+            service,
+            service === 'ATS Resume' ? 'ATS Resume - Standard' : service === 'Job Support' ? 'Job Support - 3 Months' : 'Basic',
+            amount,
+            paid ? 'Paid' : 'Pending',
+            source,
+            rep,
+            paid ? (Math.random() < 0.4 ? 'Delivered' : 'In Progress') : 'In Progress',
+            hoursFromNow(24 + Math.random() * 24),
+            Math.random() < 0.8 ? 'Guarantee Active' : 'Guarantee Fulfilled',
+            createdAt,
+            createdAt,
+          ],
+        )
+      ).lastInsertRowid;
+
+      if (paid) {
+        await run(
+          `INSERT INTO payments (client_id, amount, method, gateway_ref, status, created_at)
+           VALUES (?, ?, 'Gateway', ?, 'Confirmed', ?)`,
+          [clientId, amount, `pay_${leadId}${Math.floor(Math.random() * 9999)}`, daysAgoIso(Math.floor(Math.random() * 4))],
+        );
+      }
     }
   }
+
+  await run(
+    `INSERT INTO lead_batches (file_name, source, status, total, imported, duplicates, errors)
+     VALUES ('seed-demo-leads.csv', 'Seed', 'Imported', 60, 60, 0, 0)`,
+  );
+
+  logger.info('Seed complete: 9 users, 60 leads, demo conversions');
 }
 
-run(
-  `INSERT INTO lead_batches (file_name, source, status, total, imported, duplicates, errors)
-   VALUES ('seed-demo-leads.csv', 'Seed', 'Imported', 60, 60, 0, 0)`,
-);
-
-logger.info('Seed complete: 9 users, 60 leads, demo conversions');
+main().catch((err) => {
+  logger.error(`Seed failed: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+});

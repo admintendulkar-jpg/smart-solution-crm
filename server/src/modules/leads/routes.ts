@@ -46,8 +46,8 @@ const LEAD_SELECT = `
   LEFT JOIN users u ON u.id = l.assigned_to
 `;
 
-function assertLeadVisible(leadId: number, user: AuthUser, allowAdmin: boolean): LeadRow {
-  const lead = get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), leadId]);
+async function assertLeadVisible(leadId: number, user: AuthUser, allowAdmin: boolean): Promise<LeadRow> {
+  const lead = await get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), leadId]);
   if (!lead) {
     throw new AppError(404, 'Lead not found.', 'LEAD_NOT_FOUND');
   }
@@ -60,8 +60,8 @@ function assertLeadVisible(leadId: number, user: AuthUser, allowAdmin: boolean):
   return lead;
 }
 
-function getSetting(key: string, fallback: string): string {
-  return get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key])?.value ?? fallback;
+async function getSetting(key: string, fallback: string): Promise<string> {
+  return (await get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]))?.value ?? fallback;
 }
 
 const callOutcomeSchema = z.object({
@@ -146,7 +146,7 @@ router.get(
       params.push(term, term, term);
     }
 
-    const leads = all<LeadRow>(
+    const leads = await all<LeadRow>(
       `${LEAD_SELECT} WHERE ${conditions.join(' AND ')}
        ORDER BY is_overdue DESC,
          CASE l.status WHEN 'Follow-up' THEN 0 WHEN 'Attempting' THEN 1 WHEN 'New' THEN 2 ELSE 3 END,
@@ -164,39 +164,39 @@ router.get(
     const user = req.user!;
     const todayStart = startOfDayLocal(new Date()).toISOString();
 
-    const count = (sql: string, params: unknown[] = []): number =>
-      get<{ c: number }>(sql, params)?.c ?? 0;
+    const count = async (sql: string, params: unknown[] = []): Promise<number> =>
+      (await get<{ c: number }>(sql, params))?.c ?? 0;
 
-    const assignedTotal = count(
+    const assignedTotal = await count(
       `SELECT COUNT(*) AS c FROM leads WHERE assigned_to = ? AND status != 'Converted'`,
       [user.id],
     );
-    const todayAssigned = count(
+    const todayAssigned = await count(
       `SELECT COUNT(*) AS c FROM leads WHERE assigned_to = ? AND assigned_at >= ?`,
       [user.id, todayStart],
     );
-    const calledToday = count(
+    const calledToday = await count(
       `SELECT COUNT(*) AS c FROM call_logs WHERE user_id = ? AND created_at >= ?`,
       [user.id, todayStart],
     );
-    const connectedToday = count(
+    const connectedToday = await count(
       `SELECT COUNT(*) AS c FROM call_logs WHERE user_id = ? AND outcome = 'Connected' AND created_at >= ?`,
       [user.id, todayStart],
     );
-    const convertedToday = count(
+    const convertedToday = await count(
       `SELECT COUNT(*) AS c FROM clients WHERE sales_person_id = ? AND created_at >= ?`,
       [user.id, todayStart],
     );
-    const convertedTotal = count(
+    const convertedTotal = await count(
       `SELECT COUNT(*) AS c FROM clients WHERE sales_person_id = ?`,
       [user.id],
     );
-    const followUpsDueToday = count(
+    const followUpsDueToday = await count(
       `SELECT COUNT(*) AS c FROM leads
        WHERE assigned_to = ? AND status = 'Follow-up' AND follow_up_at < ?`,
       [user.id, todayStart],
     );
-    const followUpsDueLater = count(
+    const followUpsDueLater = await count(
       `SELECT COUNT(*) AS c FROM leads
        WHERE assigned_to = ? AND status = 'Follow-up' AND follow_up_at >= ?`,
       [user.id, todayStart],
@@ -219,7 +219,7 @@ router.get(
   '/duplicates',
   requireAdminOrAbove,
   asyncHandler(async (_req, res) => {
-    const rows = all<LeadRow>(
+    const rows = await all<LeadRow>(
       `${LEAD_SELECT} WHERE l.id IN (
          SELECT l2.id FROM leads l2 WHERE EXISTS (
            SELECT 1 FROM leads o
@@ -264,16 +264,16 @@ router.post(
   requireAdminOrAbove,
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
     const targetId = req.body?.targetId ? Number(req.body.targetId) : lead.id;
 
     const canonical = targetId === lead.id ? lead.id : targetId;
     if (targetId !== lead.id) {
-      const target = get<{ id: number }>('SELECT id FROM leads WHERE id = ?', [targetId]);
+      const target = await get<{ id: number }>('SELECT id FROM leads WHERE id = ?', [targetId]);
       if (!target) {
         throw new AppError(404, 'Target lead not found.', 'LEAD_NOT_FOUND');
       }
-      const targetLead = get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), targetId]);
+      const targetLead = await get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), targetId]);
       const sameGroup =
         targetLead &&
         (targetLead.phone === lead.phone ||
@@ -283,29 +283,29 @@ router.post(
       }
     }
 
-    const canonicalRow = get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), canonical]);
+    const canonicalRow = await get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), canonical]);
     if (!canonicalRow) {
       throw new AppError(404, 'Canonical lead not found.', 'LEAD_NOT_FOUND');
     }
 
-    run(
+    await run(
       "UPDATE leads SET is_duplicate = 0, duplicate_of = NULL, updated_at = datetime('now') WHERE id = ?",
       [canonical],
     );
 
-    const others = all<{ id: number }>(
+    const others = await all<{ id: number }>(
       `SELECT id FROM leads WHERE id != ? AND
         (phone = ? OR (email IS NOT NULL AND ? IS NOT NULL AND email = ?))`,
       [canonical, canonicalRow.phone, canonicalRow.email, canonicalRow.email],
     );
     for (const other of others) {
-      run("UPDATE leads SET is_duplicate = 1, duplicate_of = ?, updated_at = datetime('now') WHERE id = ?", [
+      await run("UPDATE leads SET is_duplicate = 1, duplicate_of = ?, updated_at = datetime('now') WHERE id = ?", [
         canonical,
         other.id,
       ]);
     }
 
-    recordAudit(
+    await recordAudit(
       user.id,
       'lead.resolve_duplicate',
       'lead',
@@ -321,23 +321,23 @@ router.get(
   '/:id',
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
-    const calls = all(
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
+    const calls = await all(
       `SELECT c.*, u.name AS user_name FROM call_logs c
        JOIN users u ON u.id = c.user_id WHERE c.lead_id = ? ORDER BY c.created_at DESC`,
       [lead.id],
     );
-    const notes = all(
+    const notes = await all(
       `SELECT n.*, u.name AS user_name FROM lead_notes n
        JOIN users u ON u.id = n.user_id WHERE n.lead_id = ? ORDER BY n.created_at DESC`,
       [lead.id],
     );
     const duplicateOf = lead.duplicate_of
-      ? get<{ id: number; name: string; phone: string }>('SELECT id, name, phone FROM leads WHERE id = ?', [
+      ? await get<{ id: number; name: string; phone: string }>('SELECT id, name, phone FROM leads WHERE id = ?', [
           lead.duplicate_of,
         ])
       : null;
-    const events = all(
+    const events = await all(
       `SELECT a.id, a.action, a.entity, a.entity_id, a.detail, a.created_at, u.name AS user_name
        FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
        WHERE a.entity = 'lead' AND a.entity_id = ?
@@ -354,7 +354,7 @@ router.post(
     const user = req.user!;
     const body = callOutcomeSchema.parse(req.body);
     // allowAdmin=true: admins can log calls on any lead, not just their own
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
     if (body.outcome === 'Call Back Later' && !body.followUpAt) {
       throw new AppError(400, 'A follow-up date is required when the outcome is "Call Back Later".', 'FOLLOWUP_REQUIRED');
@@ -383,19 +383,21 @@ router.post(
         nextStatus = lead.status;
     }
 
-    const callId = run(
-      'INSERT INTO call_logs (lead_id, user_id, outcome, duration_sec, note) VALUES (?, ?, ?, ?, ?)',
-      [lead.id, user.id, body.outcome, body.durationSec, body.note ?? null],
+    const callId = (
+      await run(
+        'INSERT INTO call_logs (lead_id, user_id, outcome, duration_sec, note) VALUES (?, ?, ?, ?, ?)',
+        [lead.id, user.id, body.outcome, body.durationSec, body.note ?? null],
+      )
     ).lastInsertRowid;
 
     const followUpAt = body.followUpAt ?? null;
-    run(
+    await run(
       `UPDATE leads SET status = ?, follow_up_at = COALESCE(?, follow_up_at),
        last_call_at = ?, last_outcome = ?, updated_at = datetime('now') WHERE id = ?`,
       [nextStatus, followUpAt, nowIso(), body.outcome, lead.id],
     );
 
-    recordAudit(
+    await recordAudit(
       user.id,
       'lead.call',
       'lead',
@@ -413,20 +415,20 @@ router.post(
     const user = req.user!;
     const body = followUpSchema.parse(req.body);
     // allowAdmin=true: admins can schedule follow-ups on any lead
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
-    run(
+    await run(
       "UPDATE leads SET follow_up_at = ?, status = 'Follow-up', updated_at = datetime('now') WHERE id = ?",
       [body.scheduledAt, lead.id],
     );
     if (body.note) {
-      run('INSERT INTO lead_notes (lead_id, user_id, body) VALUES (?, ?, ?)', [
+      await run('INSERT INTO lead_notes (lead_id, user_id, body) VALUES (?, ?, ?)', [
         lead.id,
         user.id,
         `Follow-up scheduled: ${body.note}`,
       ]);
     }
-    recordAudit(user.id, 'lead.followup', 'lead', lead.id, `Follow-up on ${body.scheduledAt}`);
+    await recordAudit(user.id, 'lead.followup', 'lead', lead.id, `Follow-up on ${body.scheduledAt}`);
 
     res.status(201).json({ success: true, status: 'Follow-up' });
   }),
@@ -437,13 +439,15 @@ router.post(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const body = noteSchema.parse(req.body);
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
-    const noteId = run('INSERT INTO lead_notes (lead_id, user_id, body) VALUES (?, ?, ?)', [
-      lead.id,
-      user.id,
-      body.body,
-    ]).lastInsertRowid;
+    const noteId = (
+      await run('INSERT INTO lead_notes (lead_id, user_id, body) VALUES (?, ?, ?)', [
+        lead.id,
+        user.id,
+        body.body,
+      ])
+    ).lastInsertRowid;
 
     res.status(201).json({ id: noteId });
   }),
@@ -455,10 +459,10 @@ router.post(
     const user = req.user!;
     const body = convertSchema.parse(req.body);
     // allowAdmin=true: admins can convert any lead
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
     if (lead.status === 'Converted') {
-      const existingClient = get<{ id: number }>('SELECT id FROM clients WHERE lead_id = ?', [lead.id]);
+      const existingClient = await get<{ id: number }>('SELECT id FROM clients WHERE lead_id = ?', [lead.id]);
       if (existingClient) {
         throw new AppError(409, 'This lead is already converted.', 'ALREADY_CONVERTED');
       }
@@ -466,12 +470,12 @@ router.post(
       // logged before conversion) is allowed through so the client gets created.
     }
 
-    const slaDays = Number(getSetting(SETTINGS_KEYS.slaBusinessDays, '4')) || 4;
+    const slaDays = Number(await getSetting(SETTINGS_KEYS.slaBusinessDays, '4')) || 4;
     const dueDate = body.deliveryDate
       ? new Date(`${body.deliveryDate}T23:59:59`)
       : addBusinessDays(new Date(), slaDays);
 
-    const serviceRep = get<{ id: number }>(
+    const serviceRep = await get<{ id: number }>(
       `SELECT id FROM users WHERE role = 'service' AND active = 1
        ORDER BY (SELECT COUNT(*) FROM clients WHERE assigned_to = users.id) ASC, id ASC LIMIT 1`,
     );
@@ -480,55 +484,57 @@ router.post(
     const salesPersonId = lead.assigned_to ?? user.id;
 
     const paymentStatus = body.paymentStatus ?? 'Pending';
-    const clientId = run(
-      `INSERT INTO clients (lead_id, name, phone, email, whatsapp, service, package_plan, amount,
-         payment_status, source, sales_person_id, assigned_to, status, due_date, guarantee_status,
-         address, alternate_phone, service_description, transaction_ref)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open', ?, 'Guarantee Active', ?, ?, ?, ?)`,
-      [
-        lead.id,
-        lead.name,
-        lead.phone,
-        body.email?.trim() || null,
-        body.whatsapp ?? null,
-        body.service,
-        body.packagePlan,
-        body.amount,
-        paymentStatus,
-        lead.source,
-        salesPersonId,
-        serviceRep?.id ?? null,
-        dueDate.toISOString(),
-        body.address ?? null,
-        body.alternatePhone ?? null,
-        body.serviceDescription ?? null,
-        body.transactionRef ?? null,
-      ],
+    const clientId = (
+      await run(
+        `INSERT INTO clients (lead_id, name, phone, email, whatsapp, service, package_plan, amount,
+           payment_status, source, sales_person_id, assigned_to, status, due_date, guarantee_status,
+           address, alternate_phone, service_description, transaction_ref)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open', ?, 'Guarantee Active', ?, ?, ?, ?)`,
+        [
+          lead.id,
+          lead.name,
+          lead.phone,
+          body.email?.trim() || null,
+          body.whatsapp ?? null,
+          body.service,
+          body.packagePlan,
+          body.amount,
+          paymentStatus,
+          lead.source,
+          salesPersonId,
+          serviceRep?.id ?? null,
+          dueDate.toISOString(),
+          body.address ?? null,
+          body.alternatePhone ?? null,
+          body.serviceDescription ?? null,
+          body.transactionRef ?? null,
+        ],
+      )
     ).lastInsertRowid;
 
     if ((body.amountPaid ?? 0) > 0) {
-      run(
+      await run(
         `INSERT INTO payments (client_id, amount, method, status, gateway_ref)
          VALUES (?, ?, ?, 'Confirmed', ?)`,
         [clientId, body.amountPaid, body.paymentMethod ?? 'Gateway', body.transactionRef ?? `manual-${Date.now()}`],
       );
     }
 
-    const paidRow = get<{ paid: number }>(
+    const paidRow = await get<{ paid: number }>(
       "SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE client_id = ? AND status = 'Confirmed'",
       [clientId],
     );
     const totalPaid = paidRow?.paid ?? 0;
     const computedPaymentStatus = totalPaid >= body.amount ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Pending';
-    run("UPDATE clients SET payment_status = ? WHERE id = ?", [computedPaymentStatus, clientId]);
+    await run("UPDATE clients SET payment_status = ? WHERE id = ?", [computedPaymentStatus, clientId]);
 
-    run(
+    await run(
       "UPDATE leads SET status = 'Converted', last_outcome = 'Converted', updated_at = datetime('now') WHERE id = ?",
       [lead.id],
     );
 
     if (body.notes) {
-      run('INSERT INTO client_notes (client_id, user_id, body) VALUES (?, ?, ?)', [
+      await run('INSERT INTO client_notes (client_id, user_id, body) VALUES (?, ?, ?)', [
         clientId,
         user.id,
         body.notes,
@@ -536,10 +542,10 @@ router.post(
     }
 
     if (serviceRep) {
-      notify(serviceRep.id, 'New client assigned', `${lead.name} (${body.service}) is in your delivery queue.`, `/clients/${clientId}`);
+      await notify(serviceRep.id, 'New client assigned', `${lead.name} (${body.service}) is in your delivery queue.`, `/clients/${clientId}`);
     }
 
-    recordAudit(
+    await recordAudit(
       user.id,
       'lead.convert',
       'lead',
@@ -555,19 +561,19 @@ router.post(
   '/:id/revert',
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
     if (lead.status !== 'Converted') {
       throw new AppError(400, 'Only converted leads can be reverted.', 'NOT_CONVERTED');
     }
 
-    const client = get<{ id: number; name: string; assigned_to: number | null }>(
+    const client = await get<{ id: number; name: string; assigned_to: number | null }>(
       'SELECT id, name, assigned_to FROM clients WHERE lead_id = ?',
       [lead.id],
     );
 
     if (client) {
-      const payments = all<{ id: number; proof_path: string | null }>(
+      const payments = await all<{ id: number; proof_path: string | null }>(
         'SELECT id, proof_path FROM payments WHERE client_id = ?',
         [client.id],
       );
@@ -580,12 +586,12 @@ router.post(
           }
         }
       }
-      run('DELETE FROM payments WHERE client_id = ?', [client.id]);
-      run('DELETE FROM client_notes WHERE client_id = ?', [client.id]);
-      run('DELETE FROM clients WHERE id = ?', [client.id]);
+      await run('DELETE FROM payments WHERE client_id = ?', [client.id]);
+      await run('DELETE FROM client_notes WHERE client_id = ?', [client.id]);
+      await run('DELETE FROM clients WHERE id = ?', [client.id]);
     }
 
-    const lastCall = get<{ outcome: string }>(
+    const lastCall = await get<{ outcome: string }>(
       `SELECT outcome FROM call_logs WHERE lead_id = ? AND outcome != 'Converted' ORDER BY id DESC LIMIT 1`,
       [lead.id],
     );
@@ -606,16 +612,16 @@ router.post(
       }
     }
 
-    run(
+    await run(
       "UPDATE leads SET status = ?, last_outcome = ?, updated_at = datetime('now') WHERE id = ?",
       [restored, lastCall?.outcome ?? null, lead.id],
     );
 
     if (client?.assigned_to) {
-      notify(client.assigned_to, 'Client reverted', `${lead.name} was moved back to the sales queue.`, `/leads/${lead.id}`);
+      await notify(client.assigned_to, 'Client reverted', `${lead.name} was moved back to the sales queue.`, `/leads/${lead.id}`);
     }
 
-    recordAudit(
+    await recordAudit(
       user.id,
       'lead.revert',
       'lead',
@@ -635,9 +641,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const body = assignSchema.parse(req.body);
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
-    const target = get<{ id: number; name: string; role: string; active: number }>(
+    const target = await get<{ id: number; name: string; role: string; active: number }>(
       'SELECT id, name, role, active FROM users WHERE id = ?',
       [body.userId],
     );
@@ -649,20 +655,20 @@ router.post(
     }
 
     const previous = lead.assigned_to ?? null;
-    run(
+    await run(
       "UPDATE leads SET assigned_to = ?, assigned_at = ?, status = CASE WHEN status = 'Not Interested' THEN 'New' ELSE status END, updated_at = datetime('now') WHERE id = ?",
       [target.id, nowIso(), lead.id],
     );
 
-    notify(target.id, 'New lead assigned', `${lead.name} (${lead.phone}) is now in your queue.`, `/leads/${lead.id}`);
+    await notify(target.id, 'New lead assigned', `${lead.name} (${lead.phone}) is now in your queue.`, `/leads/${lead.id}`);
     if (previous && previous !== target.id) {
-      const prevUser = get<{ id: number; name: string }>('SELECT id, name FROM users WHERE id = ?', [previous]);
+      const prevUser = await get<{ id: number; name: string }>('SELECT id, name FROM users WHERE id = ?', [previous]);
       if (prevUser) {
-        notify(previous, 'Lead reassigned', `${lead.name} was moved out of your queue.`);
+        await notify(previous, 'Lead reassigned', `${lead.name} was moved out of your queue.`);
       }
     }
 
-    recordAudit(user.id, 'lead.assign', 'lead', lead.id, `Assigned to ${target.name} (from ${previous ?? 'unassigned'})`);
+    await recordAudit(user.id, 'lead.assign', 'lead', lead.id, `Assigned to ${target.name} (from ${previous ?? 'unassigned'})`);
 
     res.json({ success: true });
   }),
@@ -674,7 +680,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const body = editLeadSchema.parse(req.body);
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
     const updates: string[] = [];
     const params: unknown[] = [];
@@ -701,24 +707,24 @@ router.patch(
     }
 
     if (body.phone) {
-      const dup = get<{ id: number }>('SELECT id FROM leads WHERE phone = ? AND id != ? LIMIT 1', [body.phone, lead.id]);
+      const dup = await get<{ id: number }>('SELECT id FROM leads WHERE phone = ? AND id != ? LIMIT 1', [body.phone, lead.id]);
       if (dup) {
         throw new AppError(409, 'Another lead already uses this phone number.', 'DUPLICATE_PHONE');
       }
     }
     if (body.email) {
-      const dup = get<{ id: number }>('SELECT id FROM leads WHERE email = ? AND id != ? LIMIT 1', [body.email.toLowerCase(), lead.id]);
+      const dup = await get<{ id: number }>('SELECT id FROM leads WHERE email = ? AND id != ? LIMIT 1', [body.email.toLowerCase(), lead.id]);
       if (dup) {
         throw new AppError(409, 'Another lead already uses this email.', 'DUPLICATE_EMAIL');
       }
     }
 
     updates.push("updated_at = datetime('now')");
-    run(`UPDATE leads SET ${updates.join(', ')} WHERE id = ?`, [...params, lead.id]);
+    await run(`UPDATE leads SET ${updates.join(', ')} WHERE id = ?`, [...params, lead.id]);
 
-    recordAudit(user.id, 'lead.edit', 'lead', lead.id, changed.length ? changed.join('; ') : 'Lead details updated');
+    await recordAudit(user.id, 'lead.edit', 'lead', lead.id, changed.length ? changed.join('; ') : 'Lead details updated');
 
-    const updated = get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), lead.id]);
+    const updated = await get<LeadRow>(`${LEAD_SELECT} WHERE l.id = ?`, [nowIso(), lead.id]);
     res.json({ lead: updated });
   }),
 );
@@ -728,11 +734,11 @@ router.patch(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const body = prioritySchema.parse(req.body);
-    const lead = assertLeadVisible(Number(req.params.id), user, true);
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
 
     if (lead.priority !== body.priority) {
-      run("UPDATE leads SET priority = ?, updated_at = datetime('now') WHERE id = ?", [body.priority, lead.id]);
-      recordAudit(user.id, 'lead.priority', 'lead', lead.id, `Priority ${lead.priority} → ${body.priority}`);
+      await run("UPDATE leads SET priority = ?, updated_at = datetime('now') WHERE id = ?", [body.priority, lead.id]);
+      await recordAudit(user.id, 'lead.priority', 'lead', lead.id, `Priority ${lead.priority} → ${body.priority}`);
     }
 
     res.json({ success: true, priority: body.priority });
@@ -746,7 +752,7 @@ router.post(
     const user = req.user!;
     const body = bulkAssignSchema.parse(req.body);
 
-    const target = get<{ id: number; name: string; role: string; active: number }>(
+    const target = await get<{ id: number; name: string; role: string; active: number }>(
       'SELECT id, name, role, active FROM users WHERE id = ?',
       [body.userId],
     );
@@ -759,7 +765,7 @@ router.post(
 
     const uniqueIds = [...new Set(body.leadIds)];
     const placeholders = uniqueIds.map(() => '?').join(',');
-    const found = all<{ id: number }>(`SELECT id FROM leads WHERE id IN (${placeholders})`, uniqueIds);
+    const found = await all<{ id: number }>(`SELECT id FROM leads WHERE id IN (${placeholders})`, uniqueIds);
     const foundIds = new Set(found.map((f) => f.id));
     const missing = uniqueIds.filter((id) => !foundIds.has(id));
     if (missing.length > 0) {
@@ -767,17 +773,17 @@ router.post(
     }
 
     const now = nowIso();
-    transaction(() => {
+    await transaction(async () => {
       for (const id of uniqueIds) {
-        run(
+        await run(
           "UPDATE leads SET assigned_to = ?, assigned_at = ?, status = CASE WHEN status = 'Not Interested' THEN 'New' ELSE status END, updated_at = datetime('now') WHERE id = ?",
           [target.id, now, id],
         );
       }
     });
 
-    notify(target.id, 'New leads assigned', `${uniqueIds.length} leads were assigned to you by ${user.name}.`, '/leads');
-    recordAudit(user.id, 'lead.bulk_assign', 'lead', null, `Bulk assigned ${uniqueIds.length} leads to ${target.name}`);
+    await notify(target.id, 'New leads assigned', `${uniqueIds.length} leads were assigned to you by ${user.name}.`, '/leads');
+    await recordAudit(user.id, 'lead.bulk_assign', 'lead', null, `Bulk assigned ${uniqueIds.length} leads to ${target.name}`);
 
     res.json({ success: true, assigned: uniqueIds.length });
   }),
@@ -829,9 +835,9 @@ router.get(
     const pageSize = Math.min(200, Math.max(1, Number.parseInt(String(req.query.pageSize ?? ''), 10) || 25));
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const total = get<{ c: number }>(`SELECT COUNT(*) AS c FROM leads l ${where}`, params.slice(1))?.c ?? 0;
+    const total = (await get<{ c: number }>(`SELECT COUNT(*) AS c FROM leads l ${where}`, params.slice(1)))?.c ?? 0;
 
-    const leads = all<LeadRow>(
+    const leads = await all<LeadRow>(
       `${LEAD_SELECT} ${where}
        ORDER BY CASE l.priority WHEN 'Hot' THEN 0 WHEN 'Warm' THEN 1 WHEN 'Normal' THEN 2 ELSE 3 END,
          l.updated_at DESC LIMIT ? OFFSET ?`,

@@ -49,7 +49,7 @@ router.get(
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const users = all<{
+    const users = await all<{
       id: number;
       name: string;
       email: string | null;
@@ -75,24 +75,24 @@ router.post(
     const body = createUserSchema.parse(req.body);
     const me = req.user!;
 
-    const phoneExists = get('SELECT id FROM users WHERE phone = ?', [body.phone]);
+    const phoneExists = await get('SELECT id FROM users WHERE phone = ?', [body.phone]);
     if (phoneExists) {
       throw new AppError(409, 'A user with this phone number already exists.', 'DUPLICATE_PHONE');
     }
     const email = body.email?.trim() || null;
     if (email) {
-      const emailExists = get('SELECT id FROM users WHERE email = ?', [email]);
+      const emailExists = await get('SELECT id FROM users WHERE email = ?', [email]);
       if (emailExists) {
         throw new AppError(409, 'A user with this email already exists.', 'DUPLICATE_EMAIL');
       }
     }
 
-    const result = run(
+    const result = await run(
       'INSERT INTO users (name, email, phone, role, branch) VALUES (?, ?, ?, ?, ?)',
       [body.name, email, body.phone, body.role, body.branch],
     );
 
-    recordAudit(me.id, 'user.create', 'user', result.lastInsertRowid, `${body.name} (${ROLE_LABELS[body.role]})`);
+    await recordAudit(me.id, 'user.create', 'user', result.lastInsertRowid, `${body.name} (${ROLE_LABELS[body.role]})`);
 
     res.status(201).json({ id: result.lastInsertRowid });
   }),
@@ -106,7 +106,7 @@ router.patch(
     const body = updateUserSchema.parse(req.body);
     const me = req.user!;
 
-    const target = get<{ id: number; name: string; role: string; email: string | null; phone: string | null }>(
+    const target = await get<{ id: number; name: string; role: string; email: string | null; phone: string | null }>(
       'SELECT id, name, role, email, phone FROM users WHERE id = ?',
       [id],
     );
@@ -121,14 +121,14 @@ router.patch(
     }
 
     if (body.phone && body.phone !== target.phone) {
-      const clash = get('SELECT id FROM users WHERE phone = ? AND id != ?', [body.phone, id]);
+      const clash = await get('SELECT id FROM users WHERE phone = ? AND id != ?', [body.phone, id]);
       if (clash) {
         throw new AppError(409, 'A user with this phone number already exists.', 'DUPLICATE_PHONE');
       }
     }
     if (body.email !== undefined && body.email?.trim() !== target.email) {
       const email = body.email?.trim() || null;
-      const clash = email ? get('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]) : null;
+      const clash = email ? await get('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]) : null;
       if (clash) {
         throw new AppError(409, 'A user with this email already exists.', 'DUPLICATE_EMAIL');
       }
@@ -149,10 +149,10 @@ router.patch(
     fields.push("updated_at = datetime('now')");
 
     if (fields.length > 1) {
-      run(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [...params, id]);
+      await run(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [...params, id]);
     }
 
-    recordAudit(
+    await recordAudit(
       me.id,
       'user.update',
       'user',

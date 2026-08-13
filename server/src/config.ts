@@ -36,6 +36,10 @@ export const config = {
   port: int(process.env.PORT, 4000),
   appOrigin: process.env.APP_ORIGIN ?? 'http://localhost:5173',
 
+  // When set, the server uses managed Postgres instead of a local SQLite file.
+  // Required on Render (ephemeral filesystem wipes SQLite on every redeploy).
+  databaseUrl: (process.env.DATABASE_URL ?? '').trim(),
+
   dataDir: path.resolve(__dirname, '../data'),
   dbFile: path.resolve(__dirname, '../data/crm.db'),
   uploadDir: path.resolve(__dirname, '../data/uploads'),

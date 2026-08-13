@@ -41,7 +41,7 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
 
   // 1. Resolve Target Entity from Database
   if (params.leadId) {
-    const lead = get<{ id: number; name: string; phone: string; assigned_to: number | null; status: string }>(
+    const lead = await get<{ id: number; name: string; phone: string; assigned_to: number | null; status: string }>(
       'SELECT id, name, phone, assigned_to, status FROM leads WHERE id = ?',
       [params.leadId]
     );
@@ -62,7 +62,7 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
     targetName = lead.name;
     targetPhone = lead.phone;
   } else if (params.clientId) {
-    const client = get<{ id: number; name: string; phone: string; assigned_to: number | null; sales_person_id: number | null }>(
+    const client = await get<{ id: number; name: string; phone: string; assigned_to: number | null; sales_person_id: number | null }>(
       'SELECT id, name, phone, assigned_to, sales_person_id FROM clients WHERE id = ?',
       [params.clientId]
     );
@@ -101,7 +101,7 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
   activeCallLocks.set(lockKey, Date.now());
 
   // 4. Create Pending Call Record in DB
-  const initialLog = run(
+  const initialLog = await run(
     `INSERT INTO call_logs (lead_id, client_id, user_id, outcome, duration_sec, note, provider, agent_phone, customer_phone, status)
      VALUES (?, ?, ?, 'Initiated', 0, ?, 'exotel', ?, ?, 'Initiated')`,
     [leadId, clientId, user.id, `Exotel Click-to-Call initiated for ${targetName}`, agentPhone, targetPhone]
@@ -118,9 +118,9 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
       customField: String(callLogId),
     });
 
-    run('UPDATE call_logs SET exotel_call_sid = ?, status = ? WHERE id = ?', [result.sid, result.status, callLogId]);
+    await run('UPDATE call_logs SET exotel_call_sid = ?, status = ? WHERE id = ?', [result.sid, result.status, callLogId]);
 
-    recordAudit(user.id, 'telephony.call_initiated', leadId ? 'lead' : 'client', (leadId || clientId)!, `Initiated Exotel call to ${targetName} (${targetPhone})`);
+    await recordAudit(user.id, 'telephony.call_initiated', leadId ? 'lead' : 'client', (leadId || clientId)!, `Initiated Exotel call to ${targetName} (${targetPhone})`);
 
     return {
       callLogId,
@@ -130,7 +130,7 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
     };
   } catch (err) {
     activeCallLocks.delete(lockKey);
-    run("UPDATE call_logs SET status = 'Failed', outcome = 'Failed' WHERE id = ?", [callLogId]);
+    await run("UPDATE call_logs SET status = 'Failed', outcome = 'Failed' WHERE id = ?", [callLogId]);
     if (err instanceof AppError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     throw new AppError(400, msg, 'EXOTEL_CALL_FAILED');
@@ -138,7 +138,7 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
 }
 
 export async function reconcileCallLogStatus(callLogId: number): Promise<CallLogRecord | null> {
-  const callLog = get<CallLogRecord>('SELECT * FROM call_logs WHERE id = ?', [callLogId]);
+  const callLog = await get<CallLogRecord>('SELECT * FROM call_logs WHERE id = ?', [callLogId]);
   if (!callLog || !callLog.exotel_call_sid) return callLog ?? null;
 
   // If call status is still pending, fetch live status from Exotel API
@@ -154,8 +154,8 @@ export async function reconcileCallLogStatus(callLogId: number): Promise<CallLog
         params.push(details.recordingUrl);
       }
 
-      run(`UPDATE call_logs SET ${fields.join(', ')} WHERE id = ?`, [...params, callLogId]);
-      return get<CallLogRecord>('SELECT * FROM call_logs WHERE id = ?', [callLogId]) ?? null;
+      await run(`UPDATE call_logs SET ${fields.join(', ')} WHERE id = ?`, [...params, callLogId]);
+      return (await get<CallLogRecord>('SELECT * FROM call_logs WHERE id = ?', [callLogId])) ?? null;
     }
   }
 

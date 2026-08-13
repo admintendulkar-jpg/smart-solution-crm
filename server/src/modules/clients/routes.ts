@@ -53,8 +53,8 @@ interface ClientRow {
   [key: string]: unknown;
 }
 
-function assertClientAccess(user: { id: number; role: string }, clientId: number): ClientRow {
-  const client = get<ClientRow>('SELECT * FROM clients WHERE id = ?', [clientId]);
+async function assertClientAccess(user: { id: number; role: string }, clientId: number): Promise<ClientRow> {
+  const client = await get<ClientRow>('SELECT * FROM clients WHERE id = ?', [clientId]);
   if (!client) {
     throw new AppError(404, 'Client not found.', 'CLIENT_NOT_FOUND');
   }
@@ -70,14 +70,14 @@ function assertClientAccess(user: { id: number; role: string }, clientId: number
   throw new AppError(403, 'You do not have permission to access this client.', 'FORBIDDEN');
 }
 
-function recomputePaymentStatus(clientId: number, amount: number): void {
-  const row = get<{ paid: number }>(
+async function recomputePaymentStatus(clientId: number, amount: number): Promise<void> {
+  const row = await get<{ paid: number }>(
     "SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE client_id = ? AND status = 'Confirmed'",
     [clientId],
   );
   const paid = row?.paid ?? 0;
   const next = paid >= amount ? 'Paid' : paid > 0 ? 'Partial' : 'Pending';
-  run("UPDATE clients SET payment_status = ?, updated_at = datetime('now') WHERE id = ?", [next, clientId]);
+  await run("UPDATE clients SET payment_status = ?, updated_at = datetime('now') WHERE id = ?", [next, clientId]);
 }
 
 router.use(requireAuth);
@@ -95,7 +95,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     if (user.role === 'sales') {
-      const clients = all(
+      const clients = await all(
         `${CLIENT_SELECT} WHERE c.sales_person_id = ? ORDER BY c.created_at DESC`,
         [nowIso(), user.id],
       );
@@ -103,7 +103,7 @@ router.get(
       return;
     }
     if (user.role === 'service') {
-      const clients = all(
+      const clients = await all(
         `${CLIENT_SELECT} WHERE c.assigned_to = ? ORDER BY c.created_at DESC`,
         [nowIso(), user.id],
       );
@@ -111,7 +111,7 @@ router.get(
       return;
     }
     if (['super_admin', 'admin'].includes(user.role)) {
-      const clients = all(`${CLIENT_SELECT} ORDER BY c.created_at DESC LIMIT 500`, [nowIso()]);
+      const clients = await all(`${CLIENT_SELECT} ORDER BY c.created_at DESC LIMIT 500`, [nowIso()]);
       res.json({ clients });
       return;
     }
@@ -136,7 +136,7 @@ router.get(
       const term = `%${search.trim()}%`;
       params.push(term, term, term);
     }
-    const clients = all(
+    const clients = await all(
       `${CLIENT_SELECT} ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
        ORDER BY c.updated_at DESC LIMIT 1000`,
       params,
@@ -150,14 +150,14 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const clientId = Number(req.params.id);
-    assertClientAccess(user, clientId);
+    await assertClientAccess(user, clientId);
 
-    const client = get<Record<string, unknown>>(`${CLIENT_SELECT} WHERE c.id = ?`, [nowIso(), clientId]);
+    const client = await get<Record<string, unknown>>(`${CLIENT_SELECT} WHERE c.id = ?`, [nowIso(), clientId]);
     if (!client) {
       throw new AppError(404, 'Client not found.', 'CLIENT_NOT_FOUND');
     }
-    const payments = all('SELECT * FROM payments WHERE client_id = ? ORDER BY created_at DESC', [clientId]);
-    const notes = all(
+    const payments = await all('SELECT * FROM payments WHERE client_id = ? ORDER BY created_at DESC', [clientId]);
+    const notes = await all(
       `SELECT n.*, u.name AS user_name FROM client_notes n
        JOIN users u ON u.id = n.user_id WHERE n.client_id = ? ORDER BY n.created_at DESC`,
       [clientId],
@@ -174,7 +174,7 @@ router.post(
     if (!body) {
       throw new AppError(400, 'Note cannot be empty.', 'EMPTY_NOTE');
     }
-    const client = get<{ id: number; name: string; sales_person_id: number | null; assigned_to: number | null }>(
+    const client = await get<{ id: number; name: string; sales_person_id: number | null; assigned_to: number | null }>(
       'SELECT id, name, sales_person_id, assigned_to FROM clients WHERE id = ?',
       [Number(req.params.id)],
     );
@@ -187,11 +187,13 @@ router.post(
     ) {
       throw new AppError(403, 'You cannot add notes to this client.', 'FORBIDDEN');
     }
-    const noteId = run('INSERT INTO client_notes (client_id, user_id, body) VALUES (?, ?, ?)', [
-      client.id,
-      user.id,
-      body,
-    ]).lastInsertRowid;
+    const noteId = (
+      await run('INSERT INTO client_notes (client_id, user_id, body) VALUES (?, ?, ?)', [
+        client.id,
+        user.id,
+        body,
+      ])
+    ).lastInsertRowid;
     res.status(201).json({ id: noteId });
   }),
 );
@@ -200,7 +202,7 @@ router.post(
   '/:id/payments',
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const client = assertClientAccess(user, Number(req.params.id));
+    const client = await assertClientAccess(user, Number(req.params.id));
 
     const amount = Number(req.body?.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -211,14 +213,16 @@ router.post(
       throw new AppError(400, 'Invalid payment method.', 'INVALID_METHOD');
     }
 
-    const paymentId = run('INSERT INTO payments (client_id, amount, method, status) VALUES (?, ?, ?, ?)', [
-      client.id,
-      amount,
-      method,
-      'Pending',
-    ]).lastInsertRowid;
+    const paymentId = (
+      await run('INSERT INTO payments (client_id, amount, method, status) VALUES (?, ?, ?, ?)', [
+        client.id,
+        amount,
+        method,
+        'Pending',
+      ])
+    ).lastInsertRowid;
 
-    recordAudit(user.id, 'payment.add', 'client', client.id, `${method} ₹${amount}`);
+    await recordAudit(user.id, 'payment.add', 'client', client.id, `${method} ₹${amount}`);
     res.status(201).json({ id: paymentId });
   }),
 );
@@ -230,8 +234,8 @@ router.post(
     if (user.role !== 'super_admin' && user.role !== 'admin') {
       throw new AppError(403, 'Only admins can verify payments.', 'FORBIDDEN');
     }
-    const client = assertClientAccess(user, Number(req.params.id));
-    const payment = get<{ id: number; status: string }>('SELECT id, status FROM payments WHERE id = ? AND client_id = ?', [
+    const client = await assertClientAccess(user, Number(req.params.id));
+    const payment = await get<{ id: number; status: string }>('SELECT id, status FROM payments WHERE id = ? AND client_id = ?', [
       Number(req.params.pid),
       client.id,
     ]);
@@ -242,14 +246,14 @@ router.post(
       throw new AppError(409, 'Payment is already verified.', 'ALREADY_VERIFIED');
     }
 
-    run("UPDATE payments SET status = 'Confirmed', verified_by = ?, verified_at = ? WHERE id = ?", [
+    await run("UPDATE payments SET status = 'Confirmed', verified_by = ?, verified_at = ? WHERE id = ?", [
       user.id,
       nowIso(),
       payment.id,
     ]);
-    recomputePaymentStatus(client.id, client.amount);
+    await recomputePaymentStatus(client.id, client.amount);
 
-    recordAudit(user.id, 'payment.verify', 'client', client.id, `₹${client.amount} payment ${payment.id}`);
+    await recordAudit(user.id, 'payment.verify', 'client', client.id, `₹${client.amount} payment ${payment.id}`);
     res.json({ ok: true });
   }),
 );
@@ -259,8 +263,8 @@ router.post(
   uploadProof.single('proof'),
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const client = assertClientAccess(user, Number(req.params.id));
-    const payment = get<{ id: number }>('SELECT id FROM payments WHERE id = ? AND client_id = ?', [
+    const client = await assertClientAccess(user, Number(req.params.id));
+    const payment = await get<{ id: number }>('SELECT id FROM payments WHERE id = ? AND client_id = ?', [
       Number(req.params.pid),
       client.id,
     ]);
@@ -271,8 +275,8 @@ router.post(
       throw new AppError(400, 'Proof file is required.', 'PROOF_REQUIRED');
     }
     validateUploadedFile(req.file);
-    run('UPDATE payments SET proof_path = ? WHERE id = ?', [req.file.filename, payment.id]);
-    recordAudit(user.id, 'payment.proof', 'client', client.id, `Uploaded proof for payment ${payment.id}`);
+    await run('UPDATE payments SET proof_path = ? WHERE id = ?', [req.file.filename, payment.id]);
+    await recordAudit(user.id, 'payment.proof', 'client', client.id, `Uploaded proof for payment ${payment.id}`);
     res.status(201).json({ filename: req.file.filename });
   }),
 );
@@ -281,7 +285,7 @@ router.patch(
   '/:id/status',
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const client = assertClientAccess(user, Number(req.params.id));
+    const client = await assertClientAccess(user, Number(req.params.id));
     const currentStatus = String(client.status ?? 'Open');
     const newStatus = String(req.body?.status ?? '');
 
@@ -313,8 +317,8 @@ router.patch(
       }
     }
 
-    run("UPDATE clients SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, client.id]);
-    recordAudit(user.id, 'client.status', 'client', client.id, `${currentStatus} -> ${newStatus}`);
+    await run("UPDATE clients SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, client.id]);
+    await recordAudit(user.id, 'client.status', 'client', client.id, `${currentStatus} -> ${newStatus}`);
     res.json({ ok: true });
   }),
 );
@@ -323,16 +327,16 @@ router.patch(
   '/:id/guarantee',
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const client = assertClientAccess(user, Number(req.params.id));
+    const client = await assertClientAccess(user, Number(req.params.id));
     const guaranteeStatus = String(req.body?.guarantee_status ?? '');
     if (!(GUARANTEE_STATUSES as readonly string[]).includes(guaranteeStatus)) {
       throw new AppError(400, 'Invalid guarantee status.', 'INVALID_GUARANTEE');
     }
-    run('UPDATE clients SET guarantee_status = ?, updated_at = datetime(\'now\') WHERE id = ?', [
+    await run('UPDATE clients SET guarantee_status = ?, updated_at = datetime(\'now\') WHERE id = ?', [
       guaranteeStatus,
       client.id,
     ]);
-    recordAudit(user.id, 'client.guarantee', 'client', client.id, guaranteeStatus);
+    await recordAudit(user.id, 'client.guarantee', 'client', client.id, guaranteeStatus);
     res.json({ ok: true });
   }),
 );

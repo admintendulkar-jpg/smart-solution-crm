@@ -26,7 +26,7 @@ Phase 2 (payment gateway + service team workflow), Phase 3 (reports + HR) and Ph
 | -------- | --------------------------------------------------------------- |
 | Frontend | React 18, Vite, TypeScript, TanStack Query, lucide icons        |
 | Backend  | Node.js, Express 4, TypeScript, zod                              |
-| Database | SQLite (node:sqlite) for local dev — schema is portable to PostgreSQL/MySQL |
+| Database | SQLite (node:sqlite) locally; Postgres automatically when `DATABASE_URL` is set (see Deploying to Render) |
 | Auth     | OTP via pluggable provider: console (dev) / Twilio / MSG91       |
 | Sync     | Google Sheets API (service account)                              |
 
@@ -82,6 +82,21 @@ SHEET_RANGE=Leads!A:H
 ```
 
 The scheduler pulls new rows every `SHEET_SYNC_MINUTES` (default 15). Header columns: `name`, `phone` (required), plus optional `email`, `whatsapp`, `source`, `service`.
+
+## Deploying to Render (data persistence)
+
+Render's free tier wipes the instance filesystem on every redeploy/restart, and Render's free Postgres expires after **30 days** — so a local SQLite file (`DATA_DIR`) will lose all data on Render. This app therefore supports an external managed Postgres:
+
+1. Create a free database at **Neon** or **Supabase** (these do not expire).
+2. On Render: add the connection string as a secret env var, then deploy:
+
+```
+DATABASE_URL=postgres://user:password@host:5432/dbname?sslmode=require
+APP_ORIGIN=https://smart-solution-crm.onrender.com
+```
+
+3. On boot the server auto-applies the SQL migrations (SQLite dialect is translated at runtime) and seeds the real staff accounts. No manual migrate step needed.
+4. Without `DATABASE_URL` the server falls back to the local SQLite file — identical behaviour to dev, but data will not survive a redeploy.
 
 ## API surface (Phase 1)
 

@@ -69,9 +69,9 @@ export function createApp(): express.Express {
   app.post('/api/auth/request-otp', authLimiter, authRoutes.requestOtp);
   app.post('/api/auth/verify-otp', authLimiter, authRoutes.verifyOtp);
 
-  app.use('/api/auth', requireAuth, (req, res) => {
+  app.use('/api/auth', requireAuth, (req, res, next) => {
     if (req.path === '/me') authRoutes.me(req, res);
-    else if (req.path === '/logout') authRoutes.logout(req, res);
+    else if (req.path === '/logout') authRoutes.logout(req, res, next);
     else res.status(404).json({ error: { message: 'Not found' } });
   });
 
