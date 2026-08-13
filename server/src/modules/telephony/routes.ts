@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../../auth/guards';
 import { AppError, asyncHandler } from '../../errors';
 import { initiateClickToCall, reconcileCallLogStatus } from './service';
-import { handleExotelWebhook } from './webhook';
+import { handleCallyzerWebhook, handleExotelWebhook } from './webhook';
 
 const router = Router();
 
@@ -59,5 +59,8 @@ router.get(
 
 // Exotel Webhook Handler (Public Endpoint for Exotel Server callbacks)
 router.post('/exotel/webhook', asyncHandler(handleExotelWebhook));
+
+// Callyzer Webhook Handler (Public Endpoint for Callyzer App/Server callbacks)
+router.post('/callyzer/webhook', asyncHandler(handleCallyzerWebhook));
 
 export const telephonyRoutes = router;
