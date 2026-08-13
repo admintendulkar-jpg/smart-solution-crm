@@ -9,7 +9,6 @@ import {
   Upload,
   GitBranch,
   ScrollText,
-  Building2,
   LogOut,
   Copy,
   FileDown,
@@ -69,26 +68,34 @@ const NAV_ITEMS: NavItem[] = [
 
 function Logo() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '18px 18px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 16px 12px' }}>
       <div
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          background: 'var(--gradient-primary)',
-          color: '#fff',
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: '#ffffff',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          boxShadow: '0 4px 14px rgba(124, 58, 237, 0.4)',
+          padding: 4,
+          boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
         }}
       >
-        <Building2 size={19} />
+        <img
+          src="/logo.png"
+          alt="Smart Solution Agency"
+          style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 8 }}
+          onError={(e) => {
+            const t = e.currentTarget.parentElement!;
+            t.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path d="M3 21l9-18 9 18H3z" fill="#1B52D4"/></svg>';
+          }}
+        />
       </div>
-      <div style={{ lineHeight: 1.25 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>Smart Solution</div>
-        <div style={{ fontSize: 11, color: '#94a3b8' }}>Internal CRM</div>
+      <div style={{ lineHeight: 1.2 }}>
+        <div style={{ fontWeight: 800, fontSize: 13.5, color: '#ffffff', letterSpacing: '-0.2px' }}>Smart Solution</div>
+        <div style={{ fontSize: 10.5, color: '#22A045', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Agency CRM</div>
       </div>
     </div>
   );

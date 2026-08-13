@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Building2, Phone, Mail, ShieldCheck, ArrowRight, Lock, KeyRound, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Phone, Mail, ShieldCheck, ArrowRight, Lock, KeyRound, Sparkles, CheckCircle2 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { useToast } from '@/ui/Toast';
 import { isValidPhone } from '@/lib/format';
@@ -81,13 +81,12 @@ export function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)',
+        background: 'linear-gradient(135deg, #050f28 0%, #0b2055 45%, #062614 100%)',
         position: 'relative',
         overflow: 'hidden',
         fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
       }}
     >
-      {/* Background Decorative Glow Blobs */}
       <div
         style={{
           position: 'absolute',
@@ -95,7 +94,7 @@ export function LoginPage() {
           left: '-10%',
           width: '500px',
           height: '500px',
-          background: 'radial-gradient(circle, rgba(99,102,241,0.25) 0%, rgba(0,0,0,0) 70%)',
+          background: 'radial-gradient(circle, rgba(27,82,212,0.22) 0%, rgba(0,0,0,0) 70%)',
           borderRadius: '50%',
           filter: 'blur(60px)',
           pointerEvents: 'none',
@@ -108,7 +107,7 @@ export function LoginPage() {
           right: '-10%',
           width: '600px',
           height: '600px',
-          background: 'radial-gradient(circle, rgba(168,85,247,0.2) 0%, rgba(0,0,0,0) 70%)',
+          background: 'radial-gradient(circle, rgba(34,160,69,0.18) 0%, rgba(0,0,0,0) 70%)',
           borderRadius: '50%',
           filter: 'blur(80px)',
           pointerEvents: 'none',
@@ -122,12 +121,12 @@ export function LoginPage() {
           margin: '24px',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-          background: 'rgba(30, 41, 59, 0.75)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: 'rgba(10, 22, 55, 0.80)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255, 255, 255, 0.10)',
           borderRadius: '24px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 30px rgba(99, 102, 241, 0.15)',
+          boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.6), 0 0 40px rgba(27, 82, 212, 0.12)',
           overflow: 'hidden',
         }}
       >
@@ -135,8 +134,8 @@ export function LoginPage() {
         <div
           style={{
             padding: '48px 40px',
-            background: 'linear-gradient(180deg, rgba(99, 102, 241, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%)',
-            borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+            background: 'linear-gradient(180deg, rgba(27, 82, 212, 0.10) 0%, rgba(5, 15, 40, 0.4) 100%)',
+            borderRight: '1px solid rgba(255, 255, 255, 0.07)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -144,28 +143,32 @@ export function LoginPage() {
         >
           <div>
             {/* Logo Badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '28px' }}>
               <div
                 style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  boxShadow: '0 8px 20px rgba(99, 102, 241, 0.4)',
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '16px',
+                  background: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#ffffff',
+                  padding: '6px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                 }}
               >
-                <Building2 size={26} />
+                <img
+                  src="/logo.png"
+                  alt="Smart Solution Agency"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 10 }}
+                />
               </div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: '20px', color: '#f8fafc', letterSpacing: '-0.3px' }}>
+                <div style={{ fontWeight: 800, fontSize: '18px', color: '#f8fafc', letterSpacing: '-0.3px' }}>
                   Smart Solution
                 </div>
-                <div style={{ fontSize: '13px', color: '#a5b4fc', fontWeight: 500 }}>
-                  Agency Management CRM
+                <div style={{ fontSize: '12px', color: '#22A045', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Agency · CRM Portal
                 </div>
               </div>
             </div>
@@ -192,11 +195,11 @@ export function LoginPage() {
                       width: '24px',
                       height: '24px',
                       borderRadius: '50%',
-                      background: 'rgba(99, 102, 241, 0.2)',
+                      background: 'rgba(27, 82, 212, 0.15)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#818cf8',
+                      color: '#6b9eff',
                       flexShrink: 0,
                     }}
                   >
@@ -236,9 +239,9 @@ export function LoginPage() {
                 gap: '6px',
                 padding: '4px 12px',
                 borderRadius: '20px',
-                background: 'rgba(99, 102, 241, 0.15)',
-                border: '1px solid rgba(99, 102, 241, 0.3)',
-                color: '#a5b4fc',
+                background: 'rgba(27, 82, 212, 0.12)',
+                border: '1px solid rgba(27, 82, 212, 0.25)',
+                color: '#7eb0ff',
                 fontSize: '12px',
                 fontWeight: 600,
                 marginBottom: '12px',
@@ -282,7 +285,7 @@ export function LoginPage() {
                       padding: '8px 14px',
                       borderRadius: '8px',
                       border: 'none',
-                      background: identifierType === 'email' ? '#4f46e5' : 'transparent',
+                      background: identifierType === 'email' ? '#1B52D4' : 'transparent',
                       color: identifierType === 'email' ? '#ffffff' : '#94a3b8',
                       fontSize: '13px',
                       fontWeight: 600,
@@ -307,7 +310,7 @@ export function LoginPage() {
                       padding: '8px 14px',
                       borderRadius: '8px',
                       border: 'none',
-                      background: identifierType === 'phone' ? '#4f46e5' : 'transparent',
+                      background: identifierType === 'phone' ? '#1B52D4' : 'transparent',
                       color: identifierType === 'phone' ? '#ffffff' : '#94a3b8',
                       fontSize: '13px',
                       fontWeight: 600,
@@ -376,7 +379,7 @@ export function LoginPage() {
                     padding: '12px 20px',
                     borderRadius: '10px',
                     border: 'none',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    background: 'linear-gradient(135deg, #1B52D4 0%, #1440a8 100%)',
                     color: '#ffffff',
                     fontSize: '14px',
                     fontWeight: 600,
@@ -385,7 +388,7 @@ export function LoginPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+                    boxShadow: '0 4px 16px rgba(27, 82, 212, 0.4)',
                     transition: 'transform 0.1s ease, opacity 0.2s ease',
                     opacity: requestOtp.isPending ? 0.7 : 1,
                   }}
@@ -453,7 +456,7 @@ export function LoginPage() {
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: cooldown > 0 ? '#64748b' : '#818cf8',
+                      color: cooldown > 0 ? '#64748b' : '#6b9eff',
                       fontSize: '13px',
                       fontWeight: 500,
                       cursor: cooldown > 0 ? 'default' : 'pointer',
@@ -491,7 +494,7 @@ export function LoginPage() {
                     padding: '12px 20px',
                     borderRadius: '10px',
                     border: 'none',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    background: 'linear-gradient(135deg, #22A045 0%, #187832 100%)',
                     color: '#ffffff',
                     fontSize: '14px',
                     fontWeight: 600,
@@ -500,7 +503,7 @@ export function LoginPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
-                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                    boxShadow: '0 4px 16px rgba(34, 160, 69, 0.4)',
                     transition: 'transform 0.1s ease, opacity 0.2s ease',
                     opacity: verifyOtp.isPending ? 0.7 : 1,
                   }}
