@@ -77,28 +77,19 @@ export async function handleExotelWebhook(req: Request, res: Response): Promise<
 }
 
 export async function handleCallyzerWebhook(req: Request, res: Response): Promise<void> {
-  const body = req.body || {};
-  logger.info(`Callyzer Webhook Received: ${JSON.stringify(body)}`);
+  const rawBody = req.body || {};
+  logger.info(`Callyzer Webhook Received: ${JSON.stringify(rawBody)}`);
 
-  // Extract Callyzer parameters flexible format
-  const agentPhoneRaw = String(body.agent_phone || body.employee_number || body.caller_number || body.employee_phone || '').trim();
-  const customerPhoneRaw = String(body.customer_phone || body.client_number || body.phone_number || body.client_phone || '').trim();
-  const durationSec = Number(body.duration || body.call_duration || body.duration_sec || 0);
-  const recordingUrl = String(body.recording_url || body.call_recording_url || body.recording || '').trim() || null;
-  const rawCallType = String(body.call_type || body.type || 'OUTGOING').toUpperCase();
-
+  // Support array wrapper or single object
+  const bodyObj = Array.isArray(rawBody) ? rawBody[0] || {} : rawBody;
+  
   const cleanPhone = (p: string) => {
-    const digits = p.replace(/[^0-9]/g, '');
+    const digits = String(p || '').replace(/[^0-9]/g, '');
     return digits.length >= 10 ? digits.slice(-10) : digits;
   };
 
+  const agentPhoneRaw = String(bodyObj.agent_phone || bodyObj.employee_number || bodyObj.emp_number || bodyObj.caller_number || bodyObj.employee_phone || '').trim();
   const agentPhone = cleanPhone(agentPhoneRaw);
-  const customerPhone = cleanPhone(customerPhoneRaw);
-
-  if (!customerPhone) {
-    res.status(200).json({ success: true, message: 'Ignored: Missing customer phone' });
-    return;
-  }
 
   // 1. Resolve agent user by phone
   let user = agentPhone ? await get<{ id: number; name: string }>('SELECT id, name FROM users WHERE phone LIKE ? LIMIT 1', [`%${agentPhone}`]) : undefined;
@@ -107,20 +98,34 @@ export async function handleCallyzerWebhook(req: Request, res: Response): Promis
   }
   const userId = user?.id ?? 1;
 
-  // 2. Resolve matching lead or client by phone number
-  const lead = await get<{ id: number; name: string; status: string }>(
-    'SELECT id, name, status FROM leads WHERE phone LIKE ? ORDER BY id DESC LIMIT 1',
-    [`%${customerPhone}`]
-  );
-  const client = !lead ? await get<{ id: number; name: string }>('SELECT id, name FROM clients WHERE phone LIKE ? ORDER BY id DESC LIMIT 1', [`%${customerPhone}`]) : undefined;
+  // Extract call logs array if present, otherwise treat body as single call item
+  const rawCallLogs = Array.isArray(bodyObj.call_logs) && bodyObj.call_logs.length > 0 ? bodyObj.call_logs : [bodyObj];
 
-  const isMissed = rawCallType.includes('MISSED') || rawCallType.includes('REJECTED') || durationSec === 0;
-  const outcome = isMissed ? 'Not Answered' : 'Connected';
-  const crmStatus = 'Completed';
-  const note = `Callyzer ${rawCallType} call (${durationSec}s)`;
+  let processedCount = 0;
 
-  // 3. Insert Call Log
-  const callLogId = (
+  for (const item of rawCallLogs) {
+    const customerPhoneRaw = String(item.customer_phone || item.client_number || item.phone_number || item.client_phone || bodyObj.customer_phone || bodyObj.client_number || '').trim();
+    const customerPhone = cleanPhone(customerPhoneRaw);
+
+    if (!customerPhone) continue;
+
+    const durationSec = Number(item.duration || item.call_duration || item.duration_sec || 0);
+    const recordingUrl = String(item.recording_url || item.call_recording_url || item.recording || '').trim() || null;
+    const rawCallType = String(item.call_type || item.type || 'OUTGOING').toUpperCase();
+
+    // 2. Resolve matching lead or client by phone number
+    const lead = await get<{ id: number; name: string; status: string }>(
+      'SELECT id, name, status FROM leads WHERE phone LIKE ? ORDER BY id DESC LIMIT 1',
+      [`%${customerPhone}`]
+    );
+    const client = !lead ? await get<{ id: number; name: string }>('SELECT id, name FROM clients WHERE phone LIKE ? ORDER BY id DESC LIMIT 1', [`%${customerPhone}`]) : undefined;
+
+    const isMissed = rawCallType.includes('MISSED') || rawCallType.includes('REJECTED') || durationSec === 0;
+    const outcome = isMissed ? 'Not Answered' : 'Connected';
+    const crmStatus = 'Completed';
+    const note = `Callyzer ${rawCallType} call (${durationSec}s)`;
+
+    // 3. Insert Call Log
     await run(
       `INSERT INTO call_logs (provider, user_id, lead_id, client_id, agent_phone, customer_phone, status, outcome, duration_sec, recording_url, note)
        VALUES ('callyzer', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -136,27 +141,29 @@ export async function handleCallyzerWebhook(req: Request, res: Response): Promis
         recordingUrl,
         note,
       ]
-    )
-  ).lastInsertRowid;
-
-  // 4. Update Lead status if lead call
-  if (lead) {
-    const nextStatus = lead.status === 'New' ? 'Attempting' : lead.status;
-    await run(
-      "UPDATE leads SET status = ?, last_call_at = datetime('now'), last_outcome = ?, updated_at = datetime('now') WHERE id = ?",
-      [nextStatus, outcome, lead.id]
     );
+
+    // 4. Update Lead status if lead call
+    if (lead) {
+      const nextStatus = lead.status === 'New' ? 'Attempting' : lead.status;
+      await run(
+        "UPDATE leads SET status = ?, last_call_at = datetime('now'), last_outcome = ?, updated_at = datetime('now') WHERE id = ?",
+        [nextStatus, outcome, lead.id]
+      );
+    }
+
+    // 5. Notify Agent
+    if (userId) {
+      await notify(
+        userId,
+        'Callyzer Call Synced 📞',
+        `Call with ${lead?.name || client?.name || customerPhoneRaw} recorded (${durationSec}s)`,
+        lead ? `/leads/${lead.id}` : client ? `/clients/${client.id}` : undefined
+      );
+    }
+
+    processedCount += 1;
   }
 
-  // 5. Notify Agent
-  if (userId) {
-    await notify(
-      userId,
-      'Callyzer Call Synced 📞',
-      `Call with ${lead?.name || client?.name || customerPhoneRaw} recorded (${durationSec}s)`,
-      lead ? `/leads/${lead.id}` : client ? `/clients/${client.id}` : undefined
-    );
-  }
-
-  res.status(200).json({ success: true, callLogId });
+  res.status(200).json({ success: true, processed: processedCount });
 }
