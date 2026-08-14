@@ -105,6 +105,17 @@ router.post(
 
 export const syncRoutes = router;
 
+export async function syncFromSheet(): Promise<{ imported: number; duplicates: number; errors: number }> {
+  const adapter = getAdapter();
+  if (!adapter.available) {
+    return { imported: 0, duplicates: 0, errors: 0 };
+  }
+  const rows = await adapter.fetchLeads();
+  if (rows.length === 0) return { imported: 0, duplicates: 0, errors: 0 };
+  const result = await importLeads(rows, `boot-sync-${Date.now()}`, 'Google Sheets (boot)', null);
+  return { imported: result.imported, duplicates: result.duplicates, errors: result.errors };
+}
+
 export function startSheetSyncScheduler(): void {
   if (!config.sheets.enabled) {
     logger.info('Google Sheets sync disabled (no credentials configured)');
