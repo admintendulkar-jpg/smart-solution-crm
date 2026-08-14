@@ -18,6 +18,10 @@ import {
   CalendarDays,
   FileText,
   CalendarCheck,
+  Wallet,
+  CalendarCheck2,
+  FileCheck2,
+  ClipboardCheck,
   Banknote,
   SlidersHorizontal,
 } from 'lucide-react';
