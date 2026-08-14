@@ -741,10 +741,14 @@ export function LeadDetailPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast.success(data.message || 'Opening dialer...');
-      const digits = (data.telHref || lead?.phone || '').replace(/[^0-9+]/g, '');
-      if (digits) {
-        window.location.href = digits.startsWith('tel:') ? digits : `tel:${digits}`;
+      toast.success(data.message || 'Call initiated via Callyzer...');
+      // Only launch tel: protocol link on mobile browsers to avoid Windows Phone Link popup on PC
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        const digits = (data.telHref || lead?.phone || '').replace(/[^0-9+]/g, '');
+        if (digits) {
+          window.location.href = digits.startsWith('tel:') ? digits : `tel:${digits}`;
+        }
       }
     },
     onError: (err) => toast.error(errorMessage(err)),
