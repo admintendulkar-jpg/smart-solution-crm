@@ -6,8 +6,22 @@ import { startSheetSyncScheduler, syncFromSheet } from './modules/sync/routes';
 import { ensureDefaultSettings } from './db/settings';
 
 async function boot(): Promise<void> {
-  await initializeSchema();
-  await ensureDefaultSettings();
+  logger.info('Boot: starting schema initialization...');
+  try {
+    await initializeSchema();
+    logger.info('Boot: schema OK');
+  } catch (err) {
+    logger.error(`Boot: schema FAILED — ${err instanceof Error ? err.stack : String(err)}`);
+    throw err;
+  }
+
+  try {
+    await ensureDefaultSettings();
+    logger.info('Boot: settings OK');
+  } catch (err) {
+    logger.error(`Boot: settings FAILED — ${err instanceof Error ? err.stack : String(err)}`);
+    throw err;
+  }
 
   startSheetSyncScheduler();
 

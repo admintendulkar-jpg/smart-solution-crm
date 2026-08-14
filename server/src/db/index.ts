@@ -30,8 +30,12 @@ if (usePostgres) {
   pool = new Pool({
     connectionString: config.databaseUrl,
     max: 10,
-    connectionTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 15_000,
     idleTimeoutMillis: 30_000,
+    // Neon (and most managed Postgres) require SSL
+    ssl: config.databaseUrl.includes('neon.tech') || config.databaseUrl.includes('sslmode=require')
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
   pool.on('error', (err) => logger.error(`Postgres pool error: ${err.message}`));
   logger.info(`Using Postgres database (${config.databaseUrl.split('@').pop() ?? 'remote'})`);
