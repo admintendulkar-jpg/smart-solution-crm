@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckSquare, Square, ArrowRight, ArrowLeft, History, Layers } from 'lucide-react';
+import { CheckSquare, Square, ArrowRight, ArrowLeft, History } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { QUERY_KEYS } from '@/lib/constants';
 import { formatDateTime } from '@/lib/format';
