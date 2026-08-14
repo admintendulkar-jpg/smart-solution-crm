@@ -294,10 +294,10 @@ function AdminDashboard() {
           <Card>
             <CardHeader title="Lead pipeline" subtitle={`${totalOpen} open leads in motion`} />
             <CardBody>
-              <div style={{ height: 210 }}>
+              <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 6, right: 6, left: -18, bottom: 0 }} barCategoryGap="28%">
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} axisLine={{ stroke: 'var(--color-border)' }} tickLine={false} interval={0} />
+                  <BarChart data={chartData} margin={{ top: 10, right: 12, left: -16, bottom: 28 }} barCategoryGap="22%">
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-muted)', dy: 6 }} axisLine={{ stroke: 'var(--color-border)' }} tickLine={false} interval={0} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip
                       cursor={{ fill: 'rgba(37, 99, 235, 0.06)' }}
