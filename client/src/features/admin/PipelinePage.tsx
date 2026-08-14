@@ -31,7 +31,7 @@ export function PipelinePage() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: QUERY_KEYS.allLeads('pipeline'),
-    queryFn: () => api.get<{ leads: Lead[] }>('/leads'),
+    queryFn: () => api.get<{ leads: Lead[] }>('/leads?pageSize=1000'),
   });
 
   const groups = useMemo(() => {
