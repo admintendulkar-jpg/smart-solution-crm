@@ -336,15 +336,15 @@ export async function ensureRealUsers(): Promise<void> {
   // Auto-assign any unassigned leads to real active sales reps asynchronously in background
   setTimeout(async () => {
     try {
-      const activeSales = await all<{ id: number }>('SELECT id FROM users WHERE role = "sales" AND active = 1 ORDER BY id ASC');
+      const activeSales = await all<{ id: number }>('SELECT id FROM users WHERE role = \'sales\' AND active = 1 ORDER BY id ASC');
       if (activeSales.length > 0) {
-        const unassignedLeads = await all<{ id: number }>('SELECT id FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = "New" ORDER BY id ASC');
+        const unassignedLeads = await all<{ id: number }>('SELECT id FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = \'New\' ORDER BY id ASC');
         if (unassignedLeads.length > 0) {
           await transaction(async () => {
             let idx = 0;
             for (const lead of unassignedLeads) {
               const rep = activeSales[idx % activeSales.length];
-              await run('UPDATE leads SET assigned_to = ?, assigned_at = datetime("now") WHERE id = ?', [rep.id, lead.id]);
+              await run('UPDATE leads SET assigned_to = ?, assigned_at = datetime(\'now\') WHERE id = ?', [rep.id, lead.id]);
               idx += 1;
             }
           });

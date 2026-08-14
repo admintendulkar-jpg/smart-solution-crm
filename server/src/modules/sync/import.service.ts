@@ -55,10 +55,15 @@ export async function importLeads(
         }
       }
 
-      const existing = await get<{ id: number; name: string }>(
-        `SELECT id, name FROM leads WHERE phone = ? OR (email IS NOT NULL AND ? IS NOT NULL AND email = ?) LIMIT 1`,
-        [phone, email, email],
-      );
+      const existing = email
+        ? await get<{ id: number; name: string }>(
+            `SELECT id, name FROM leads WHERE phone = ? OR email = ? LIMIT 1`,
+            [phone, email],
+          )
+        : await get<{ id: number; name: string }>(
+            `SELECT id, name FROM leads WHERE phone = ? LIMIT 1`,
+            [phone],
+          );
 
       if (existing) {
         await run(
