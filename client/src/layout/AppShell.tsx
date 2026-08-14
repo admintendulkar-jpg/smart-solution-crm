@@ -10,7 +10,6 @@ import {
   GitBranch,
   ScrollText,
   LogOut,
-  Copy,
   FileDown,
   Menu,
   X,
