@@ -78,12 +78,9 @@ export async function getDistributionHistory(): Promise<DistributionHistoryItem[
 }
 
 export async function getDistributionSummary() {
-  const unassignedPool =
-    (
-      await get<{ c: number }>(
-        `SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'`,
-      )
-    )?.c ?? 0;
+  const totalLeads = (await get<{ c: number }>(`SELECT COUNT(*) AS c FROM leads`))?.c ?? 0;
+  const distributedLeads = (await get<{ c: number }>(`SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NOT NULL`))?.c ?? 0;
+  const unassignedPool = (await get<{ c: number }>(`SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND status = 'New'`))?.c ?? 0;
 
   const reps = await all<{ id: number; name: string; email: string; phone: string; branch: string }>(
     `SELECT id, name, email, phone, branch FROM users WHERE role = 'sales' AND active = 1 ORDER BY id ASC`,
@@ -91,7 +88,7 @@ export async function getDistributionSummary() {
 
   const history = await getDistributionHistory();
 
-  return { unassignedPool, reps, history };
+  return { totalLeads, distributedLeads, unassignedPool, reps, history };
 }
 
 const distributeSchema = z.object({
@@ -120,7 +117,7 @@ export async function executeLeadDistribution(
 
   // Fetch all current unassigned leads
   const unassignedLeads = await all<{ id: number; name: string; phone: string }>(
-    `SELECT id, name, phone FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New' ORDER BY created_at ASC`,
+    `SELECT id, name, phone FROM leads WHERE assigned_to IS NULL AND status = 'New' ORDER BY created_at ASC`,
   );
 
   if (unassignedLeads.length === 0) {
@@ -241,18 +238,6 @@ router.get(
   '/summary',
   asyncHandler(async (_req, res) => {
     res.json(await getDistributionSummary());
-  }),
-);
-
-// Reset all uncalled New leads back to unassigned pool
-router.post(
-  '/reset-pool',
-  asyncHandler(async (req, res) => {
-    const result = await run(
-      `UPDATE leads SET assigned_to = NULL, assigned_at = NULL, is_duplicate = 0 WHERE status = 'New' AND last_call_at IS NULL`,
-    );
-    await recordAudit(req.user!.id, 'lead.repool', 'lead', null, `Reset ${result.changes} new leads back to unassigned pool`);
-    res.json({ success: true, count: result.changes, summary: await getDistributionSummary() });
   }),
 );
 

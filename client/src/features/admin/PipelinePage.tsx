@@ -35,20 +35,17 @@ export function PipelinePage() {
   });
 
   const groups = useMemo(() => {
-    const leads = (data?.leads ?? []).filter((l) => l.is_duplicate === 0);
+    const leads = data?.leads ?? [];
     const map = new Map<string, RepGroup>();
     for (const lead of leads) {
-      const key = lead.assigned_to ? String(lead.assigned_to) : 'unassigned';
+      if (!lead.assigned_to) continue; // Skip unassigned leads so no Unassigned card appears in Pipeline
+      const key = String(lead.assigned_to);
       if (!map.has(key)) {
-        map.set(key, { id: lead.assigned_to, name: lead.assigned_name ?? 'Unassigned', leads: [] });
+        map.set(key, { id: lead.assigned_to, name: lead.assigned_name ?? 'Rep', leads: [] });
       }
       map.get(key)!.leads.push(lead);
     }
-    return Array.from(map.values()).sort((a, b) => {
-      if (a.id === null) return 1;
-      if (b.id === null) return -1;
-      return a.name.localeCompare(b.name);
-    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [data]);
 
   if (isError) return <ErrorState error={isError} />;

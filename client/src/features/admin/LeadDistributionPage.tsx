@@ -44,6 +44,8 @@ interface DistributionBatch {
 }
 
 interface SummaryResponse {
+  totalLeads: number;
+  distributedLeads: number;
   unassignedPool: number;
   reps: RepItem[];
   history: DistributionBatch[];
@@ -71,6 +73,8 @@ export function LeadDistributionPage() {
 
   const [detailBatch, setDetailBatch] = useState<DistributionBatch | null>(null);
 
+  const totalLeads = data?.totalLeads ?? 0;
+  const distributedLeads = data?.distributedLeads ?? 0;
   const pool = data?.unassignedPool ?? 0;
   const activeReps = data?.reps ?? [];
   const history = data?.history ?? [];
@@ -144,18 +148,6 @@ export function LeadDistributionPage() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
-  const resetPoolMutation = useMutation({
-    mutationFn: () => api.post<{ count: number }>('/admin/distribution/reset-pool', {}),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['distributionSummary'] });
-      queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
-      toast.success(`✅ ${res.count} leads returned to the Unassigned Lead Pool!`);
-    },
-    onError: (err) => toast.error(errorMessage(err)),
-  });
-
   function toggleRepSelection(id: number) {
     setSelectedRepIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -180,7 +172,7 @@ export function LeadDistributionPage() {
         subtitle="Distribute batches of unassigned leads to your sales team with custom daily targets."
       />
 
-      {/* ===== HERO UNASSIGNED LEADS CARD ===== */}
+      {/* ===== HERO METRICS CARD ===== */}
       <Card
         style={{
           background: 'linear-gradient(135deg, #071530 0%, #0c2254 50%, #082914 100%)',
@@ -197,31 +189,50 @@ export function LeadDistributionPage() {
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: 20,
+            gap: 24,
           }}
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#22A045', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-              <Layers size={16} /> Unassigned Lead Pool
+          <div style={{ display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                📦 Total Leads
+              </div>
+              <div style={{ fontSize: 34, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                {totalLeads}
+              </div>
             </div>
-            <div style={{ fontSize: 44, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.03em', lineHeight: 1 }}>
-              {pool} <span style={{ fontSize: 20, fontWeight: 500, color: '#94a3b8' }}>leads waiting</span>
+
+            <div style={{ width: 1, height: 36, background: 'rgba(255, 255, 255, 0.15)' }} />
+
+            <div>
+              <div style={{ color: '#22A045', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                ✅ Distributed Leads
+              </div>
+              <div style={{ fontSize: 34, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                {distributedLeads}
+              </div>
             </div>
-            <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 8 }}>
-              {pool > 0
-                ? `${pool} leads are currently sitting in the pool ready to be assigned.`
-                : 'All leads are assigned or in queue. Click "Return All New Leads to Pool" below to unassign and re-distribute them.'}
+
+            <div style={{ width: 1, height: 36, background: 'rgba(255, 255, 255, 0.15)' }} />
+
+            <div>
+              <div style={{ color: '#38bdf8', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                ⏳ Balance Unassigned
+              </div>
+              <div style={{ fontSize: 34, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                {pool} <span style={{ fontSize: 16, fontWeight: 500, color: '#94a3b8' }}>leads waiting</span>
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div>
             <Button
               size="lg"
               disabled={pool === 0}
               onClick={handleOpenModal}
               style={{
                 height: 48,
-                padding: '0 24px',
+                padding: '0 28px',
                 fontSize: 15,
                 fontWeight: 700,
                 borderRadius: 12,
@@ -232,26 +243,6 @@ export function LeadDistributionPage() {
               }}
             >
               🚀 Distribute Leads
-            </Button>
-
-            <Button
-              size="lg"
-              variant="secondary"
-              loading={resetPoolMutation.isPending}
-              onClick={() => resetPoolMutation.mutate()}
-              style={{
-                height: 48,
-                padding: '0 18px',
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 12,
-                background: 'rgba(255, 255, 255, 0.1)',
-                color: '#ffffff',
-                border: '1px solid rgba(255, 255, 255, 0.25)',
-              }}
-              title="Unassigns all uncalled New leads so you can test distributing them in a batch"
-            >
-              🔄 Return All New Leads to Pool
             </Button>
           </div>
         </div>
