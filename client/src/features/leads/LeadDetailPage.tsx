@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -10,18 +10,15 @@ import {
   CheckCircle2,
   MessageSquarePlus,
   AlertTriangle,
-  Play,
-  Square,
   Pencil,
   StickyNote,
   Clock,
-  Save,
   X,
   Undo2,
 } from 'lucide-react';
 import { useAuth } from '@/auth/auth';
 import { api, errorMessage } from '@/lib/api';
-import { BRANCHES, CALL_OUTCOMES, LEAD_PRIORITIES, LEAD_SOURCES, PACKAGES, QUERY_KEYS, SERVICES } from '@/lib/constants';
+import { BRANCHES, LEAD_PRIORITIES, LEAD_SOURCES, PACKAGES, QUERY_KEYS, SERVICES } from '@/lib/constants';
 import { formatDateTime, formatDuration, toUtcInput } from '@/lib/format';
 import type { AuditEntry, CallLog, Lead, LeadDetail as LeadDetailData, LeadNote } from '@/lib/types';
 import { Button } from '@/ui/Button';
@@ -32,7 +29,6 @@ import { Card, CardHeader } from '@/ui/Card';
 import { Spinner } from '@/ui/Spinner';
 import { ErrorState } from '@/ui/ErrorState';
 import { useToast } from '@/ui/Toast';
-
 function phoneHref(phone: string): string {
   const digits = phone.replace(/[^0-9+]/g, '');
   return digits ? `tel:${digits}` : '#';
@@ -75,145 +71,9 @@ function agingInfo(lead: { last_call_at: string | null }): { days: number | null
   return { days };
 }
 
-interface CallOutcomeForm {
-  outcome: string;
-  durationSec: number;
-  note: string;
-  followUpAt: string;
-}
-
-function mmss(total: number): string {
-  const m = Math.floor(total / 60).toString().padStart(2, '0');
-  const s = (total % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
-}
-
-function CallOutcomeModal({ leadId, onClose, onConvert }: { leadId: number; onClose: () => void; onConvert: () => void }) {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-  const [form, setForm] = useState<CallOutcomeForm>({ outcome: 'Connected', durationSec: 0, note: '', followUpAt: '' });
-  const [timerRunning, setTimerRunning] = useState(true);
-  const [elapsed, setElapsed] = useState(0);
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const intervalRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    intervalRef.current = window.setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => {
-      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  function stopTimer() {
-    if (timerRunning && intervalRef.current !== null) {
-      window.clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      setForm((f) => ({ ...f, durationSec: elapsed }));
-      setTimerRunning(false);
-    }
-  }
-
-  function startTimer() {
-    if (!timerRunning) {
-      setElapsed(0);
-      setForm((f) => ({ ...f, durationSec: 0 }));
-      setTimerRunning(true);
-      intervalRef.current = window.setInterval(() => setElapsed((s) => s + 1), 1000);
-    }
-  }
-
-  const mutation = useMutation({
-    mutationFn: (payload: { outcome: string; followUpAt?: string }) => {
-      setPendingAction(payload.outcome);
-      return api.post<{ status: string }>(`/leads/${leadId}/call`, {
-        outcome: payload.outcome,
-        durationSec: elapsed,
-        note: form.note || undefined,
-        followUpAt: payload.outcome === 'Call Back Later' && payload.followUpAt ? toUtcInput(new Date(payload.followUpAt)) : undefined,
-      });
-    },
-    onSuccess: (data: { status: string }, payload) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
-      queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadStats });
-      if (payload.outcome === 'Converted') {
-        onConvert();
-      } else {
-        toast.success(`Call logged — lead moved to "${data.status}".`);
-        onClose();
-      }
-    },
-    onError: (err) => toast.error(errorMessage(err)),
-    onSettled: () => setPendingAction(null),
-  });
-
-  const needsFollowUp = form.outcome === 'Call Back Later';
-  const isPending = (action: string) => mutation.isPending && pendingAction === action;
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title="Log call outcome"
-      subtitle="Timer started automatically — save when the call ends"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="danger" icon={<X size={13} />} onClick={() => mutation.mutate({ outcome: 'Not Interested' })} loading={isPending('Not Interested')}>
-            Not Interested
-          </Button>
-          <Button variant="secondary" icon={<CalendarClock size={13} />} onClick={() => setForm((f) => ({ ...f, outcome: 'Call Back Later' }))}>
-            Follow-up
-          </Button>
-          <Button variant="secondary" icon={<CheckCircle2 size={13} />} onClick={() => mutation.mutate({ outcome: 'Converted' })} loading={isPending('Converted')}>
-            Convert
-          </Button>
-          <Button icon={<Save size={13} />} loading={mutation.isPending && pendingAction === form.outcome} onClick={() => mutation.mutate({ outcome: form.outcome })} disabled={needsFollowUp && !form.followUpAt}>
-            Save outcome
-          </Button>
-        </>
-      }
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            background: timerRunning ? 'var(--color-danger-bg)' : 'var(--color-grey-bg)',
-            borderRadius: 10,
-            padding: '10px 14px',
-          }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: timerRunning ? 'var(--color-danger-text)' : 'var(--color-text-secondary)' }}>
-            <Clock size={18} /> {mmss(elapsed)}
-          </span>
-          <Button size="sm" variant={timerRunning ? 'danger-solid' : 'secondary'} icon={timerRunning ? <Square size={12} /> : <Play size={12} />} onClick={timerRunning ? stopTimer : startTimer}>
-            {timerRunning ? 'Stop' : 'Start'}
-          </Button>
-        </div>
-        <Field label="Outcome">
-          <Select value={form.outcome} onChange={(e) => setForm({ ...form, outcome: e.target.value })}>
-            {CALL_OUTCOMES.filter((o) => o !== 'Converted').map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </Select>
-        </Field>
-        {needsFollowUp && (
-          <Field label="Follow-up date & time" hint="The lead resurfaces in your queue at this time">
-            <Input type="datetime-local" value={form.followUpAt} onChange={(e) => setForm({ ...form, followUpAt: e.target.value })} />
-          </Field>
-        )}
-        <Field label="Call notes">
-          <Textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="What did the client say?" />
-        </Field>
-      </div>
-    </Modal>
-  );
-}
-
 function FollowUpModal({ leadId, onClose }: { leadId: number; onClose: () => void }) {
+
+
   const queryClient = useQueryClient();
   const toast = useToast();
   const [scheduledAt, setScheduledAt] = useState('');
@@ -670,16 +530,30 @@ function ActivityTimeline({
                         Exotel
                       </span>
                     )}
-                    {typeof item.durationSec === 'number' && item.durationSec > 0 && (
-                      <span style={{ color: 'var(--color-text-muted)' }}> · {formatDuration(item.durationSec)}</span>
+                    {item.provider === 'callyzer' && (
+                      <span className="badge" style={{ marginLeft: 6, fontSize: 10, background: '#e0f2fe', color: '#0284c7' }}>
+                        Callyzer
+                      </span>
                     )}
-                    <span style={{ color: 'var(--color-text-muted)' }}> · {formatDateTime(item.ts)}</span>
+                    {typeof item.durationSec === 'number' && item.durationSec > 0 && (
+                      <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 6, background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        ⏱️ {formatDuration(item.durationSec)} ({item.durationSec}s)
+                      </span>
+                    )}
+                    <span style={{ color: 'var(--color-text-muted)', marginLeft: 4 }}> · {formatDateTime(item.ts)}</span>
                     {item.sub && <div style={{ color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap', marginTop: 2 }}>{item.sub}</div>}
-                    {item.recordingUrl && (
-                      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)' }}>🎧 Recording:</span>
-                        <audio controls src={item.recordingUrl} style={{ height: 28, maxWidth: 280 }} />
+                    {item.recordingUrl ? (
+                      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, background: '#f0f9ff', padding: '8px 12px', borderRadius: 8, border: '1px solid #bae6fd' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1' }}>🎧 Call Recording:</span>
+                        <audio controls src={item.recordingUrl} style={{ height: 32, maxWidth: 300 }} />
+                        <a href={item.recordingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#0284c7', fontWeight: 600, textDecoration: 'underline' }}>Download</a>
                       </div>
+                    ) : (
+                      item.kind === 'call' && (
+                        <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic', marginTop: 3 }}>
+                          (Audio recording syncs from Callyzer app if recording is enabled on phone)
+                        </div>
+                      )
                     )}
                     <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 2 }}>{item.by}</div>
                   </div>
@@ -700,10 +574,25 @@ export function LeadDetailPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  const [showCallModal, setShowCallModal] = useState(false);
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+
+  const notInterestedMutation = useMutation({
+    mutationFn: () =>
+      api.post<{ status: string }>(`/leads/${leadId}/call`, {
+        outcome: 'Not Interested',
+        durationSec: 0,
+        note: 'Marked as Not Interested from quick action bar',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadStats });
+      toast.success('Lead marked as Not Interested.');
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: QUERY_KEYS.leadDetail(leadId),
@@ -821,11 +710,20 @@ export function LeadDetailPage() {
               >
                 Click to Call
               </Button>
-              <Button icon={<PhoneCall size={14} />} onClick={() => setShowCallModal(true)}>
-                Log call
-              </Button>
               <Button variant="secondary" icon={<CalendarClock size={14} />} onClick={() => setShowFollowUpModal(true)}>
                 Follow-up
+              </Button>
+              <Button
+                variant="danger"
+                icon={<X size={14} />}
+                onClick={() => {
+                  if (window.confirm('Mark this lead as Not Interested?')) {
+                    notInterestedMutation.mutate();
+                  }
+                }}
+                loading={notInterestedMutation.isPending}
+              >
+                Not Interested
               </Button>
               {(canAct || canAdmin) && (
                 <Button variant="secondary" icon={<CheckCircle2 size={14} />} onClick={() => setShowConvertModal(true)}>
@@ -849,6 +747,7 @@ export function LeadDetailPage() {
               Undo Outcome
             </Button>
           )}
+
           {(canAct || canAdmin) && (
             <div style={{ minWidth: 122 }}>
               <Select
@@ -952,7 +851,6 @@ export function LeadDetailPage() {
         <ActivityTimeline leadId={leadId} calls={calls} notes={notes} events={events} />
       </div>
 
-      {showCallModal && <CallOutcomeModal leadId={leadId} onClose={() => setShowCallModal(false)} onConvert={() => { setShowCallModal(false); setShowConvertModal(true); }} />}
       {showFollowUpModal && <FollowUpModal leadId={leadId} onClose={() => setShowFollowUpModal(false)} />}
       {showConvertModal && <ConvertModal leadId={leadId} onClose={() => setShowConvertModal(false)} />}
       {showEditModal && <EditLeadModal lead={lead} onClose={() => setShowEditModal(false)} />}
