@@ -967,17 +967,31 @@ export function LeadDetailPage() {
           }
         >
           <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 16 }}>
-              Check your Android phone's Callyzer App push notification OR tap below to dial directly:
+            <div style={{ fontSize: 13.5, color: 'var(--color-text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              Call trigger sent via Callyzer Cloud! Check your Android phone's Callyzer App notification.
             </div>
-            <a
-              href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`}
-              style={{ textDecoration: 'none' }}
-            >
-              <Button size="lg" icon={<Phone size={16} />} style={{ width: '100%', height: 46 }}>
-                Dial {lead.phone} Now
+            {typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent) ? (
+              <a
+                href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`}
+                style={{ textDecoration: 'none' }}
+              >
+                <Button size="lg" icon={<Phone size={16} />} style={{ width: '100%', height: 46 }}>
+                  Dial {lead.phone} Now
+                </Button>
+              </a>
+            ) : (
+              <Button
+                size="lg"
+                icon={<Phone size={16} />}
+                style={{ width: '100%', height: 46 }}
+                onClick={() => {
+                  navigator.clipboard.writeText(lead.phone);
+                  toast.success(`Copied ${lead.phone} to clipboard!`);
+                }}
+              >
+                📋 Copy {lead.phone}
               </Button>
-            </a>
+            )}
           </div>
         </Modal>
       )}
