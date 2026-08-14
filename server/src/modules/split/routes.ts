@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireSuperAdmin } from '../../auth/guards';
+import { requireAdminOrAbove, requireAuth } from '../../auth/guards';
 import { SETTINGS_KEYS } from '../../constants';
 import { all, get, run, transaction } from '../../db';
 import { AppError, asyncHandler } from '../../errors';
@@ -234,7 +234,7 @@ export async function runLeadSplitEngine(overrideCount?: number, actorId?: numbe
 
 // ===== ROUTE DEFINITIONS =====
 router.use(requireAuth);
-router.use(requireSuperAdmin);
+router.use(requireAdminOrAbove);
 
 // New Lead Distribution summary & wizard data
 router.get(

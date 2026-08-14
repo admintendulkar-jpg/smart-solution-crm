@@ -77,6 +77,7 @@ export function createApp(): express.Express {
 
   app.use('/api/admin/users', usersRoutes);
   app.use('/api/admin/split', splitRoutes);
+  app.use('/api/admin/distribution', splitRoutes);
   app.use('/api/admin/sync', syncRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/leads', leadsRoutes);
