@@ -115,12 +115,13 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
       const cleanAgentPhone = (agentPhone || '').replace(/[^0-9]/g, '').slice(-10);
       const cleanCustomerPhone = (targetPhone || '').replace(/[^0-9]/g, '').slice(-10);
 
-      // Trigger Callyzer API dial with agent phone routing
+      // Trigger Callyzer API dial with agent phone routing & dual auth headers
       const apiRes = await fetch('https://api.callyzer.co/v2/call/dial', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.telephony.callyzerApiKey}`,
+          'X-Api-Key': config.telephony.callyzerApiKey,
         },
         body: JSON.stringify({
           phone_number: cleanCustomerPhone,
@@ -130,19 +131,22 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
           caller_number: cleanAgentPhone,
         }),
       });
-      const apiData = await apiRes.json().catch(() => ({}));
-      logger.info(`Callyzer API response: ${JSON.stringify(apiData)}`);
+      const apiData = (await apiRes.json().catch(() => ({}))) as Record<string, unknown>;
+      logger.info(`Callyzer API response (${apiRes.status}): ${JSON.stringify(apiData)}`);
 
       await run("UPDATE call_logs SET status = 'Initiated', outcome = 'Attempting' WHERE id = ?", [callLogId]);
       await recordAudit(user.id, 'telephony.callyzer_call', leadId ? 'lead' : 'client', (leadId || clientId)!, `Initiated Callyzer call to ${targetName} (${targetPhone})`);
 
       const cleanTargetPhone = targetPhone.replace(/[^0-9+]/g, '');
+      const serverMsg = String(apiData.message || apiData.msg || apiData.error || '').trim();
+      const userMsg = serverMsg ? `Callyzer: ${serverMsg}` : `Call command sent to Callyzer for ${targetName}.`;
 
       return {
         callLogId,
         status: 'Initiated',
         telHref: `tel:${cleanTargetPhone}`,
-        message: `Call command sent to Callyzer for ${targetName}. Check your phone.`,
+        message: userMsg,
+        apiData,
       };
     } catch (err) {
       const cleanTargetPhone = targetPhone.replace(/[^0-9+]/g, '');
@@ -150,7 +154,7 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
         callLogId,
         status: 'Initiated',
         telHref: `tel:${cleanTargetPhone}`,
-        message: `Call command logged for ${targetName}.`,
+        message: `Call logged for ${targetName}.`,
       };
     }
   }
