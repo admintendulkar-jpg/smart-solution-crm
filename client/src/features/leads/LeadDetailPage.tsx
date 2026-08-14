@@ -741,9 +741,10 @@ export function LeadDetailPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast.success(data.message || 'Call initiated via Callyzer...');
-      if (data.telHref) {
-        window.location.href = data.telHref;
+      toast.success(data.message || 'Opening dialer...');
+      const digits = (data.telHref || lead?.phone || '').replace(/[^0-9+]/g, '');
+      if (digits) {
+        window.location.href = digits.startsWith('tel:') ? digits : `tel:${digits}`;
       }
     },
     onError: (err) => toast.error(errorMessage(err)),
