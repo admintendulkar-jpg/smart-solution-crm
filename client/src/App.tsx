@@ -72,7 +72,6 @@ export default function App() {
         <Route path="/pipeline" element={<Shell><RequireRoles roles={['super_admin', 'admin']}><PipelinePage /></RequireRoles></Shell>} />
         <Route path="/clients" element={<Shell><ClientsPage /></Shell>} />
         <Route path="/clients/:id" element={<Shell><ClientDetailPage /></Shell>} />
-        <Route path="/duplicates" element={<Shell><RequireRoles roles={['super_admin', 'admin']}><DuplicatesPage /></RequireRoles></Shell>} />
         <Route path="/export" element={<Shell><RequireRoles roles={['super_admin', 'admin']}><ExportPage /></RequireRoles></Shell>} />
         <Route path="/users" element={<Shell><RequireRoles roles={['super_admin', 'admin']}><UsersPage /></RequireRoles></Shell>} />
         <Route path="/import" element={<Shell><RequireRoles roles={['super_admin']}><ImportPage /></RequireRoles></Shell>} />

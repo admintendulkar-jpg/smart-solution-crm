@@ -817,6 +817,22 @@ router.patch(
 );
 
 router.post(
+  '/:id/revert',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const lead = await assertLeadVisible(Number(req.params.id), user, true);
+
+    await run(
+      `UPDATE leads SET status = 'New', follow_up_at = NULL, last_call_at = NULL, last_outcome = NULL, updated_at = datetime('now') WHERE id = ?`,
+      [lead.id],
+    );
+
+    await recordAudit(user.id, 'lead.revert_status', 'lead', lead.id, `Reverted lead ${lead.id} status from ${lead.status} to New`);
+    res.json({ success: true, status: 'New' });
+  }),
+);
+
+router.post(
   '/bulk-assign',
   requireAdminOrAbove,
   asyncHandler(async (req, res) => {

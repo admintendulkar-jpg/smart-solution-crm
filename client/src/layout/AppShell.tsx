@@ -46,7 +46,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/leads', label: 'All Leads', icon: <Inbox size={16} />, roles: ['super_admin', 'admin'] },
   { to: '/pipeline', label: 'Pipeline', icon: <KanbanSquare size={16} />, roles: ['super_admin', 'admin'] },
   { to: '/clients', label: 'Clients', icon: <Users size={16} />, roles: ['super_admin', 'admin', 'sales', 'service'] },
-  { to: '/duplicates', label: 'Duplicates', icon: <Copy size={16} />, roles: ['super_admin', 'admin'] },
   { to: '/users', label: 'Team', icon: <UserRoundCog size={16} />, roles: ['super_admin', 'admin'] },
   { to: '/import', label: 'Lead Import', icon: <Upload size={16} />, roles: ['super_admin'] },
   { to: '/distribution', label: 'Lead Distribution', icon: <GitBranch size={16} />, roles: ['super_admin', 'admin'] },

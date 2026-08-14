@@ -757,7 +757,7 @@ export function LeadDetailPage() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clients('mine') });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.clients('all') });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
-      toast.success('Conversion reverted — the lead is back in the sales queue.');
+      toast.success('Lead status reset to New — accidental outcome undone!');
     },
     onError: (err) => toast.error(errorMessage(err)),
   });
@@ -823,6 +823,21 @@ export function LeadDetailPage() {
                 </Button>
               )}
             </>
+          )}
+          {lead.status !== 'New' && (canAct || canAdmin) && (
+            <Button
+              variant="secondary"
+              icon={<Undo2 size={14} style={{ color: 'var(--color-warning-text)' }} />}
+              loading={revertMutation.isPending}
+              onClick={() => {
+                if (window.confirm('Reset this lead status back to New and clear accidental follow-up/call log?')) {
+                  revertMutation.mutate();
+                }
+              }}
+              title="Undo accidental call outcome or status change and reset lead back to New"
+            >
+              Undo Outcome
+            </Button>
           )}
           {(canAct || canAdmin) && (
             <div style={{ minWidth: 122 }}>
