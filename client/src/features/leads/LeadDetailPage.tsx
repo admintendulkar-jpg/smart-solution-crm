@@ -736,13 +736,15 @@ export function LeadDetailPage() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
+  const [showDialModal, setShowDialModal] = useState(false);
+
   const clickToCallMutation = useMutation({
     mutationFn: () => api.post<{ message: string; callLogId: number; telHref?: string }>('/telephony/call', { leadId }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success(data.message || 'Call initiated via Callyzer...');
-      // Only launch tel: protocol link on mobile browsers to avoid Windows Phone Link popup on PC
+      setShowDialModal(true);
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       if (isMobile) {
         const digits = (data.telHref || lead?.phone || '').replace(/[^0-9+]/g, '');
@@ -954,6 +956,31 @@ export function LeadDetailPage() {
       {showFollowUpModal && <FollowUpModal leadId={leadId} onClose={() => setShowFollowUpModal(false)} />}
       {showConvertModal && <ConvertModal leadId={leadId} onClose={() => setShowConvertModal(false)} />}
       {showEditModal && <EditLeadModal lead={lead} onClose={() => setShowEditModal(false)} />}
+      {showDialModal && (
+        <Modal
+          open
+          onClose={() => setShowDialModal(false)}
+          title="📞 Callyzer Call Triggered"
+          subtitle={`Call command sent for ${lead.name} (${lead.phone})`}
+          footer={
+            <Button variant="secondary" onClick={() => setShowDialModal(false)}>Close</Button>
+          }
+        >
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <div style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 16 }}>
+              Check your Android phone's Callyzer App push notification OR tap below to dial directly:
+            </div>
+            <a
+              href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`}
+              style={{ textDecoration: 'none' }}
+            >
+              <Button size="lg" icon={<Phone size={16} />} style={{ width: '100%', height: 46 }}>
+                Dial {lead.phone} Now
+              </Button>
+            </a>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }
