@@ -172,14 +172,14 @@ export function LeadDistributionPage() {
         subtitle="Distribute batches of unassigned leads to your sales team with custom daily targets."
       />
 
-      {/* ===== HERO METRICS CARD ===== */}
-      <Card
+      {/* ===== HERO METRICS CONTAINER ===== */}
+      <div
         style={{
-          background: 'linear-gradient(135deg, #071530 0%, #0c2254 50%, #082914 100%)',
+          background: '#0f172a',
           color: '#ffffff',
           borderRadius: 20,
           padding: '28px 32px',
-          boxShadow: '0 16px 40px rgba(11, 30, 72, 0.25)',
+          boxShadow: '0 16px 40px rgba(15, 23, 42, 0.2)',
           marginBottom: 28,
         }}
       >
@@ -195,7 +195,7 @@ export function LeadDistributionPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap' }}>
             <div>
               <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                📦 Total Leads
+                📦 TOTAL LEADS
               </div>
               <div style={{ fontSize: 34, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
                 {totalLeads}
@@ -205,8 +205,8 @@ export function LeadDistributionPage() {
             <div style={{ width: 1, height: 36, background: 'rgba(255, 255, 255, 0.15)' }} />
 
             <div>
-              <div style={{ color: '#22A045', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                ✅ Distributed Leads
+              <div style={{ color: '#4ade80', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                ✅ DISTRIBUTED LEADS
               </div>
               <div style={{ fontSize: 34, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
                 {distributedLeads}
@@ -217,7 +217,7 @@ export function LeadDistributionPage() {
 
             <div>
               <div style={{ color: '#38bdf8', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                ⏳ Balance Unassigned
+                ⏳ BALANCE UNASSIGNED
               </div>
               <div style={{ fontSize: 34, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
                 {pool} <span style={{ fontSize: 16, fontWeight: 500, color: '#94a3b8' }}>leads waiting</span>
@@ -246,7 +246,7 @@ export function LeadDistributionPage() {
             </Button>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* ===== RECENT DISTRIBUTIONS HISTORY ===== */}
       <Card>
