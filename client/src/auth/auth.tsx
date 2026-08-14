@@ -15,19 +15,15 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, failureCount } = useQuery({
+  const { data, isLoading, isError, error, failureCount } = useQuery({
     queryKey: QUERY_KEYS.me,
-    queryFn: async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12_000); // 12s timeout
-      try {
-        return await api.get<{ user: User }>('/auth/me');
-      } finally {
-        clearTimeout(timer);
-      }
+    queryFn: () => api.get<{ user: User }>('/auth/me'),
+    // Only retry on network failures, NOT on 401 (not authenticated)
+    retry: (count, err) => {
+      if (err instanceof ApiError && err.status === 401) return false;
+      return count < 2;
     },
-    retry: 3,
-    retryDelay: (attempt) => Math.min(2000 * attempt, 6000),
+    retryDelay: 3000,
   });
 
   const logoutMutation = useMutation({
@@ -39,6 +35,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const logout = useCallback(() => logoutMutation.mutate(), [logoutMutation]);
+
+  // 401 = not logged in → go to login page (not an error)
+  const is401 = error instanceof ApiError && error.status === 401;
 
   if (isLoading) {
     const isSlowStart = failureCount > 0;
@@ -58,7 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  if (isError) {
+  // Real connection error (not 401)
+  if (isError && !is401) {
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
         <img src="/logo.png" alt="Smart Solution Agency" style={{ width: 52, height: 52, objectFit: 'contain', marginBottom: 4 }} />
