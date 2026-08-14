@@ -163,7 +163,7 @@ router.use(requireSuperAdmin);
 router.get(
   '/preview',
   asyncHandler(async (_req, res) => {
-    res.json(splitSummary());
+    res.json(await splitSummary());
   }),
 );
 

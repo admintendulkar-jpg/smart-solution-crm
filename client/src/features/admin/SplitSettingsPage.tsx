@@ -115,8 +115,10 @@ export function SplitSettingsPage() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
-  const totalReps = preview?.reps.length ?? 0;
-  void totalReps;
+  const reps = preview?.reps ?? [];
+  const pool = preview?.pool ?? 0;
+  const currentQuota = preview?.quota ?? 50;
+  const isEnabled = preview?.enabled ?? false;
 
   return (
     <>
@@ -135,34 +137,34 @@ export function SplitSettingsPage() {
                 <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                   <div className="stat-card" style={{ flex: 1 }}>
                     <div className="stat-label">Unassigned pool</div>
-                    <div className="stat-value" style={{ fontSize: 22 }}>{preview.pool}</div>
+                    <div className="stat-value" style={{ fontSize: 22 }}>{pool}</div>
                   </div>
                   <div className="stat-card" style={{ flex: 1 }}>
                     <div className="stat-label">Quota per rep</div>
-                    <div className="stat-value" style={{ fontSize: 22 }}>{preview.quota}</div>
+                    <div className="stat-value" style={{ fontSize: 22 }}>{currentQuota}</div>
                   </div>
                   <div className="stat-card" style={{ flex: 1 }}>
                     <div className="stat-label">Active reps</div>
-                    <div className="stat-value" style={{ fontSize: 22 }}>{preview.reps.length}</div>
+                    <div className="stat-value" style={{ fontSize: 22 }}>{reps.length}</div>
                   </div>
                 </div>
 
-                {preview.reps.length > 0 && (
+                {reps.length > 0 && (
                   <div style={{ marginBottom: 18 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Load today</div>
-                    {preview.reps.map((rep) => (
+                    {reps.map((rep) => (
                       <div key={rep.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0' }}>
                         <Avatar name={rep.name} size="sm" />
                         <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{rep.name}</span>
-                        <span style={{ fontSize: 12, color: rep.load >= preview.quota ? 'var(--color-danger-text)' : 'var(--color-text-muted)' }}>
-                          {rep.load} / {preview.quota}
+                        <span style={{ fontSize: 12, color: rep.load >= currentQuota ? 'var(--color-danger-text)' : 'var(--color-text-muted)' }}>
+                          {rep.load} / {currentQuota}
                         </span>
                         <div style={{ width: 90, height: 6, background: 'var(--color-grey-bg)', borderRadius: 4, overflow: 'hidden' }}>
                           <div
                             style={{
                               height: '100%',
-                              width: `${Math.min(100, (rep.load / Math.max(1, preview.quota)) * 100)}%`,
-                              background: rep.load >= preview.quota ? 'var(--color-danger)' : 'var(--color-primary)',
+                              width: `${Math.min(100, (rep.load / Math.max(1, currentQuota)) * 100)}%`,
+                              background: rep.load >= currentQuota ? 'var(--color-danger)' : 'var(--color-primary)',
                               borderRadius: 4,
                             }}
                           />
@@ -175,21 +177,21 @@ export function SplitSettingsPage() {
                 <div className="alert alert-warning" style={{ fontSize: 12.5, marginBottom: 16 }}>
                   <GitBranch size={15} style={{ flexShrink: 0, marginTop: 1 }} />
                   <span>
-                    {preview.enabled
-                      ? `Split is enabled. Running it assigns up to ${preview.quota} leads per rep from the pool of ${preview.pool}.`
+                    {isEnabled
+                      ? `Split is enabled. Running it assigns up to ${currentQuota} leads per rep from the pool of ${pool}.`
                       : 'Split is currently disabled. Enable it below before running.'}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <Button icon={<Play size={14} />} loading={runSplit.isPending} disabled={!preview.enabled || preview.pool === 0} onClick={() => runSplit.mutate()}>
+                  <Button icon={<Play size={14} />} loading={runSplit.isPending} disabled={!isEnabled || pool === 0} onClick={() => runSplit.mutate()}>
                     Run split now
                   </Button>
                   <Button
                     variant="secondary"
                     icon={<Play size={14} />}
                     loading={forceAssign.isPending}
-                    disabled={preview.reps.length === 0}
+                    disabled={reps.length === 0}
                     onClick={() => forceAssign.mutate()}
                     title="Assigns ALL unassigned leads — bypasses quota and enabled settings"
                   >
