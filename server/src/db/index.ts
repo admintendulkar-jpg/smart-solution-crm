@@ -109,12 +109,14 @@ export async function run(sql: string, params: unknown[] = []): Promise<DbResult
 
   let suffix = '';
   if (isIgnore) suffix += ' ON CONFLICT DO NOTHING';
-  if (wantsId) suffix += ' RETURNING id';
+  // Use RETURNING * instead of RETURNING id — handles tables where PK is not named 'id'
+  if (wantsId) suffix += ' RETURNING *';
   if (suffix) text = text.replace(/;\s*$/, '') + suffix + ';';
 
   const result = await execute(toPlaceholders(text), params);
   let lastInsertRowid = 0;
-  if (wantsId && result.rows.length > 0) lastInsertRowid = Number(result.rows[0].id);
+  // Safely get id — tables like 'settings' use 'key' as PK, so id may be absent
+  if (wantsId && result.rows.length > 0) lastInsertRowid = Number(result.rows[0].id ?? 0);
   return { lastInsertRowid, changes: result.rowCount ?? 0 };
 }
 
