@@ -144,6 +144,18 @@ export function LeadDistributionPage() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
+  const resetPoolMutation = useMutation({
+    mutationFn: () => api.post<{ count: number }>('/admin/distribution/reset-pool', {}),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['distributionSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
+      toast.success(`✅ ${res.count} leads returned to the Unassigned Lead Pool!`);
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+
   function toggleRepSelection(id: number) {
     setSelectedRepIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -198,18 +210,18 @@ export function LeadDistributionPage() {
             <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 8 }}>
               {pool > 0
                 ? `${pool} leads are currently sitting in the pool ready to be assigned.`
-                : 'All leads are currently assigned! Sync new leads from Google Sheets or CSV.'}
+                : 'All leads are assigned or in queue. Click "Return All New Leads to Pool" below to unassign and re-distribute them.'}
             </div>
           </div>
 
-          <div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Button
               size="lg"
               disabled={pool === 0}
               onClick={handleOpenModal}
               style={{
                 height: 48,
-                padding: '0 28px',
+                padding: '0 24px',
                 fontSize: 15,
                 fontWeight: 700,
                 borderRadius: 12,
@@ -220,6 +232,26 @@ export function LeadDistributionPage() {
               }}
             >
               🚀 Distribute Leads
+            </Button>
+
+            <Button
+              size="lg"
+              variant="secondary"
+              loading={resetPoolMutation.isPending}
+              onClick={() => resetPoolMutation.mutate()}
+              style={{
+                height: 48,
+                padding: '0 18px',
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 12,
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#ffffff',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+              }}
+              title="Unassigns all uncalled New leads so you can test distributing them in a batch"
+            >
+              🔄 Return All New Leads to Pool
             </Button>
           </div>
         </div>

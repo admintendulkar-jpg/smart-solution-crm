@@ -244,6 +244,18 @@ router.get(
   }),
 );
 
+// Reset all uncalled New leads back to unassigned pool
+router.post(
+  '/reset-pool',
+  asyncHandler(async (req, res) => {
+    const result = await run(
+      `UPDATE leads SET assigned_to = NULL, assigned_at = NULL, is_duplicate = 0 WHERE status = 'New' AND last_call_at IS NULL`,
+    );
+    await recordAudit(req.user!.id, 'lead.repool', 'lead', null, `Reset ${result.changes} new leads back to unassigned pool`);
+    res.json({ success: true, count: result.changes, summary: await getDistributionSummary() });
+  }),
+);
+
 // New Lead Distribution execution
 router.post(
   '/distribute',
