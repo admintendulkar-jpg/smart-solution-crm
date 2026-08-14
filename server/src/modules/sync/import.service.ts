@@ -112,12 +112,6 @@ export async function importLeads(
     );
   });
 
-  // Always try to assign unassigned leads after every sync, regardless of how many were newly imported
-  try {
-    await assignAllUnassignedLeads(actorId ?? undefined);
-  } catch (err) {
-    // non-fatal
-  }
 
   if (result.imported > 0) {
     await notifyRole(

@@ -136,6 +136,7 @@ export function LeadDistributionPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['distributionSummary'] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.dashboard });
       toast.success(`🎉 ${totalAssignedInForm} leads distributed successfully!`);
       setModalOpen(false);
