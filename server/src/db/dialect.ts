@@ -30,7 +30,9 @@ export function transformDialect(sql: string, toPostgres: boolean): string {
     // SQLite REAL → PostgreSQL DOUBLE PRECISION (or just leave as REAL which PG supports)
     // SQLite INTEGER → INTEGER (PG supports this natively)
     // Remove SQLite-specific PRAGMA statements if any leaked into migrations
-    .replace(/PRAGMA\s+\w+\s*=\s*\w+\s*;/gi, '-- PRAGMA removed for PG');
+    .replace(/PRAGMA\s+\w+\s*=\s*\w+\s*;/gi, '-- PRAGMA removed for PG')
+    // SQLite ON CONFLICT excluded.field → PostgreSQL EXCLUDED.field
+    .replace(/\bexcluded\./gi, 'EXCLUDED.');
 }
 
 /**

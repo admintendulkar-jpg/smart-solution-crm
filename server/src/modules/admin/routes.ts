@@ -184,23 +184,23 @@ router.get(
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (typeof status === 'string' && status) {
-      conditions.push('status = ?');
+      conditions.push('l.status = ?');
       params.push(status);
     }
     if (typeof branch === 'string' && branch) {
-      conditions.push('branch = ?');
+      conditions.push('l.branch = ?');
       params.push(branch);
     }
     if (typeof rep === 'string' && rep && rep !== 'all') {
-      conditions.push('assigned_to = ?');
+      conditions.push('l.assigned_to = ?');
       params.push(Number(rep));
     }
     if (typeof from === 'string' && from) {
-      conditions.push('created_at >= ?');
+      conditions.push('l.created_at >= ?');
       params.push(from);
     }
     if (typeof to === 'string' && to) {
-      conditions.push('created_at <= ?');
+      conditions.push('l.created_at <= ?');
       params.push(to);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
