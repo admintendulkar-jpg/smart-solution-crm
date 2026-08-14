@@ -158,6 +158,77 @@ router.get(
 );
 
 router.get(
+  '/my-progress',
+  requireSalesOrAbove,
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const todayStart = startOfDayLocal(new Date()).toISOString();
+
+    // Get latest distribution batch item for this rep
+    let latestBatchItem: { daily_target: number; assigned_count: number; created_at: string } | undefined;
+    try {
+      latestBatchItem = await get<{ daily_target: number; assigned_count: number; created_at: string }>(
+        `SELECT daily_target, assigned_count, created_at
+         FROM distribution_batch_items
+         WHERE rep_id = ?
+         ORDER BY id DESC LIMIT 1`,
+        [user.id],
+      );
+    } catch {
+      latestBatchItem = undefined;
+    }
+
+    const todayTarget = latestBatchItem?.daily_target ?? 40;
+
+    // Completed today: leads assigned to this rep with calls logged today OR updated today & no longer New
+    const completedTodayCount =
+      (
+        await get<{ c: number }>(
+          `SELECT COUNT(DISTINCT id) AS c FROM leads
+           WHERE assigned_to = ? AND (last_call_at >= ? OR (updated_at >= ? AND status != 'New'))`,
+          [user.id, todayStart, todayStart],
+        )
+      )?.c ?? 0;
+
+    const remainingToday = Math.max(0, todayTarget - completedTodayCount);
+
+    // Batch metrics for this rep
+    const totalAssignedLeads =
+      (await get<{ c: number }>(`SELECT COUNT(*) AS c FROM leads WHERE assigned_to = ?`, [user.id]))?.c ?? 0;
+
+    const batchTotal = latestBatchItem?.assigned_count ? Math.max(latestBatchItem.assigned_count, totalAssignedLeads) : totalAssignedLeads;
+
+    const batchCompleted =
+      (
+        await get<{ c: number }>(
+          `SELECT COUNT(*) AS c FROM leads WHERE assigned_to = ? AND (last_call_at IS NOT NULL OR status != 'New')`,
+          [user.id],
+        )
+      )?.c ?? 0;
+
+    const activeNewRemaining =
+      (
+        await get<{ c: number }>(
+          `SELECT COUNT(*) AS c FROM leads WHERE assigned_to = ? AND status NOT IN ('Converted', 'Not Interested')`,
+          [user.id],
+        )
+      )?.c ?? 0;
+
+    const estimatedCompletionDays = Math.ceil(activeNewRemaining / Math.max(1, todayTarget));
+
+    res.json({
+      todayTarget,
+      completedToday: completedTodayCount,
+      remainingToday,
+      batchTotal: Math.max(batchTotal, activeNewRemaining),
+      completedFromBatch: batchCompleted,
+      remainingBatch: activeNewRemaining,
+      estimatedCompletionDays,
+    });
+  }),
+);
+
+router.get(
   '/stats',
   requireSalesOrAbove,
   asyncHandler(async (req, res) => {

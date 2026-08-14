@@ -11,183 +11,272 @@ import { notify } from '../notifications';
 
 const router = Router();
 
-async function getQuota(): Promise<number> {
-  const raw = (await get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.dailyLeadQuota]))
-    ?.value;
-  const quota = raw ? Number(raw) : config.dailyLeadQuota;
-  return Number.isFinite(quota) && quota > 0 ? Math.floor(quota) : config.dailyLeadQuota;
-}
-
-async function getSplitEnabled(): Promise<boolean> {
-  const raw = (await get<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SETTINGS_KEYS.leadSplitEnabled]))
-    ?.value;
-  return raw === 'true';
-}
-
-interface RepWithLoad {
+export interface DistributionHistoryItem {
   id: number;
-  name: string;
-  load: number;
-  [key: string]: unknown;
+  actor_id: number | null;
+  actor_name: string | null;
+  total_leads: number;
+  selected_reps_count: number;
+  split_type: 'equal' | 'custom';
+  daily_target: number;
+  deadline: string | null;
+  created_at: string;
+  items: {
+    id: number;
+    rep_id: number;
+    rep_name: string;
+    assigned_count: number;
+    daily_target: number;
+  }[];
 }
 
-async function repLoads(): Promise<RepWithLoad[]> {
-  const todayStart = startOfDayLocal(new Date()).toISOString();
-  return all<RepWithLoad>(
-    `SELECT u.id, u.name, COUNT(l.id) AS load
-     FROM users u
-     LEFT JOIN leads l ON l.assigned_to = u.id AND l.assigned_at >= ?
-     WHERE u.role = 'sales' AND u.active = 1
-     GROUP BY u.id, u.name
-     ORDER BY COUNT(l.id) ASC, u.id ASC`,
-    [todayStart],
+export async function getDistributionHistory(): Promise<DistributionHistoryItem[]> {
+  try {
+    const batches = await all<{
+      id: number;
+      actor_id: number | null;
+      actor_name: string | null;
+      total_leads: number;
+      selected_reps_count: number;
+      split_type: 'equal' | 'custom';
+      daily_target: number;
+      deadline: string | null;
+      created_at: string;
+    }>(
+      `SELECT b.id, b.actor_id, u.name AS actor_name, b.total_leads, b.selected_reps_count,
+              b.split_type, b.daily_target, b.deadline, b.created_at
+       FROM distribution_batches b
+       LEFT JOIN users u ON u.id = b.actor_id
+       ORDER BY b.id DESC
+       LIMIT 25`,
+    );
+
+    const historyWithDetails: DistributionHistoryItem[] = [];
+    for (const b of batches) {
+      const items = await all<{
+        id: number;
+        rep_id: number;
+        rep_name: string;
+        assigned_count: number;
+        daily_target: number;
+      }>(
+        `SELECT i.id, i.rep_id, u.name AS rep_name, i.assigned_count, i.daily_target
+         FROM distribution_batch_items i
+         JOIN users u ON u.id = i.rep_id
+         WHERE i.batch_id = ?
+         ORDER BY i.id ASC`,
+        [b.id],
+      );
+      historyWithDetails.push({ ...b, items });
+    }
+
+    return historyWithDetails;
+  } catch (err) {
+    // If migration hasn't created tables yet or query fails, return empty array
+    return [];
+  }
+}
+
+export async function getDistributionSummary() {
+  const unassignedPool =
+    (
+      await get<{ c: number }>(
+        `SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'`,
+      )
+    )?.c ?? 0;
+
+  const reps = await all<{ id: number; name: string; email: string; phone: string; branch: string }>(
+    `SELECT id, name, email, phone, branch FROM users WHERE role = 'sales' AND active = 1 ORDER BY id ASC`,
   );
+
+  const history = await getDistributionHistory();
+
+  return { unassignedPool, reps, history };
 }
 
-async function splitSummary(): Promise<{ reps: RepWithLoad[]; pool: number; quota: number; enabled: boolean }> {
-  const pool =
-    (await get<{ c: number }>(
-      `SELECT COUNT(*) AS c FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'`,
-    ))?.c ?? 0;
-  return { reps: await repLoads(), pool, quota: await getQuota(), enabled: await getSplitEnabled() };
+const distributeSchema = z.object({
+  selectedRepIds: z.array(z.number().int().positive()).min(1, 'Select at least one sales rep'),
+  splitType: z.enum(['equal', 'custom']),
+  customCounts: z.record(z.string(), z.number().int().min(0)).optional(),
+  dailyTarget: z.number().int().min(1).default(40),
+  deadline: z.string().optional().nullable(),
+});
+
+export async function executeLeadDistribution(
+  body: z.infer<typeof distributeSchema>,
+  actorId: number,
+) {
+  const { selectedRepIds, splitType, customCounts, dailyTarget, deadline } = distributeSchema.parse(body);
+
+  // Fetch valid selected active sales reps
+  const reps = await all<{ id: number; name: string }>(
+    `SELECT id, name FROM users WHERE role = 'sales' AND active = 1 AND id IN (${selectedRepIds.map(() => '?').join(',')}) ORDER BY id ASC`,
+    selectedRepIds,
+  );
+
+  if (reps.length === 0) {
+    throw new AppError(400, 'None of the selected sales reps are active.', 'NO_ACTIVE_REPS');
+  }
+
+  // Fetch all current unassigned leads
+  const unassignedLeads = await all<{ id: number; name: string; phone: string }>(
+    `SELECT id, name, phone FROM leads WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New' ORDER BY created_at ASC`,
+  );
+
+  if (unassignedLeads.length === 0) {
+    throw new AppError(409, 'There are no unassigned leads in the pool to distribute.', 'NO_LEADS');
+  }
+
+  // Determine distribution count per rep
+  const repCounts: { repId: number; repName: string; count: number }[] = [];
+
+  if (splitType === 'equal') {
+    const totalToDistribute = unassignedLeads.length;
+    const N = reps.length;
+    const baseShare = Math.floor(totalToDistribute / N);
+    const remainder = totalToDistribute % N;
+
+    for (let i = 0; i < N; i++) {
+      const share = baseShare + (i < remainder ? 1 : 0);
+      repCounts.push({ repId: reps[i].id, repName: reps[i].name, count: share });
+    }
+  } else {
+    // Custom split
+    let totalRequested = 0;
+    for (const r of reps) {
+      const count = customCounts?.[String(r.id)] ?? customCounts?.[r.id] ?? 0;
+      repCounts.push({ repId: r.id, repName: r.name, count });
+      totalRequested += count;
+    }
+
+    if (totalRequested <= 0) {
+      throw new AppError(400, 'Please enter at least 1 lead for at least one sales rep.', 'INVALID_CUSTOM_COUNTS');
+    }
+
+    if (totalRequested > unassignedLeads.length) {
+      throw new AppError(
+        400,
+        `Cannot assign ${totalRequested} leads. Only ${unassignedLeads.length} leads are available in the unassigned pool.`,
+        'EXCEEDS_POOL',
+      );
+    }
+  }
+
+  let totalAssigned = 0;
+  let leadPointer = 0;
+
+  await transaction(async () => {
+    // 1. Create distribution batch record
+    const batchRes = await run(
+      `INSERT INTO distribution_batches (actor_id, total_leads, selected_reps_count, split_type, daily_target, deadline)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [actorId, unassignedLeads.length, reps.length, splitType, dailyTarget, deadline ?? null],
+    );
+    const batchId = batchRes.lastInsertRowid;
+
+    // 2. Assign leads per rep
+    for (const item of repCounts) {
+      if (item.count <= 0) continue;
+
+      const leadsToAssign = unassignedLeads.slice(leadPointer, leadPointer + item.count);
+      leadPointer += item.count;
+      totalAssigned += leadsToAssign.length;
+
+      // Insert batch item
+      await run(
+        `INSERT INTO distribution_batch_items (batch_id, rep_id, assigned_count, daily_target)
+         VALUES (?, ?, ?, ?)`,
+        [batchId, item.repId, leadsToAssign.length, dailyTarget],
+      );
+
+      // Batch update leads assignment
+      for (const lead of leadsToAssign) {
+        await run(
+          `UPDATE leads SET assigned_to = ?, assigned_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+          [item.repId, lead.id],
+        );
+      }
+
+      // Notify sales rep
+      await notify(
+        item.repId,
+        `🚀 ${leadsToAssign.length} new leads assigned to you`,
+        `Target: ${dailyTarget} leads/day. Start connecting with your queue!`,
+      );
+    }
+
+    if (actorId && totalAssigned > 0) {
+      await recordAudit(actorId, 'lead.distribution', 'lead', null, `Distributed ${totalAssigned} leads to ${reps.length} sales reps (${splitType} split, target ${dailyTarget}/day)`);
+    }
+  });
+
+  return { success: true, totalAssigned, summary: await getDistributionSummary() };
+}
+
+// ===== BACKWARD COMPATIBILITY ENGINE HELPERS =====
+export async function assignAllUnassignedLeads(actorId?: number): Promise<{ assigned: number }> {
+  const summary = await getDistributionSummary();
+  if (summary.reps.length === 0 || summary.unassignedPool === 0) return { assigned: 0 };
+  const result = await executeLeadDistribution(
+    {
+      selectedRepIds: summary.reps.map((r) => r.id),
+      splitType: 'equal',
+      dailyTarget: 40,
+    },
+    actorId ?? summary.reps[0].id,
+  );
+  return { assigned: result.totalAssigned };
 }
 
 export async function runLeadSplitEngine(overrideCount?: number, actorId?: number): Promise<{ assigned: number }> {
-  if (!(await getSplitEnabled())) {
-    return { assigned: 0 };
-  }
-
-  const { reps, quota } = await splitSummary();
-  if (reps.length === 0) {
-    return { assigned: 0 };
-  }
-
-  const maxAssign = overrideCount ?? quota;
-  let assigned = 0;
-  let round = 0;
-  const assignments: Record<number, string[]> = {};
-
-  await transaction(async () => {
-    for (const rep of reps) {
-      assignments[rep.id] = [];
-    }
-    while (true) {
-      const rep = reps[round % reps.length];
-      if (rep.load >= quota) {
-        round += 1;
-        if (round >= reps.length * 2) break;
-        continue;
-      }
-      const lead = await get<{ id: number; name: string; phone: string }>(
-        `SELECT id, name, phone FROM leads
-         WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'
-         ORDER BY created_at ASC LIMIT 1`,
-      );
-      if (!lead) break;
-      await run(
-        "UPDATE leads SET assigned_to = ?, assigned_at = ?, updated_at = datetime('now') WHERE id = ?",
-        [rep.id, nowIso(), lead.id],
-      );
-      assignments[rep.id].push(`${lead.name} (${lead.phone})`);
-      rep.load += 1;
-      assigned += 1;
-      if (assigned >= maxAssign) break;
-      round += 1;
-    }
-  });
-
-  for (const [repId, leads] of Object.entries(assignments)) {
-    if (leads.length > 0) {
-      await notify(Number(repId), `${leads.length} new lead${leads.length > 1 ? 's' : ''} assigned`, leads.slice(0, 5).join(', '));
-    }
-  }
-
-  if (actorId && assigned > 0) {
-    await recordAudit(actorId, 'lead.split', 'lead', null, `Auto-split assigned ${assigned} lead(s)`);
-  }
-
-  return { assigned };
+  return assignAllUnassignedLeads(actorId);
 }
 
-/**
- * Unconditionally assign all unassigned leads to active sales reps (round-robin).
- * Used after sync to ensure leads are always visible to sales reps,
- * bypassing the leadSplitEnabled setting flag.
- */
-export async function assignAllUnassignedLeads(actorId?: number): Promise<{ assigned: number }> {
-  const reps = await all<{ id: number; name: string }>(
-    `SELECT id, name FROM users WHERE role = 'sales' AND active = 1 ORDER BY id ASC`,
-  );
-  if (reps.length === 0) return { assigned: 0 };
-
-  const unassigned = await all<{ id: number; name: string; phone: string }>(
-    `SELECT id, name, phone FROM leads
-     WHERE assigned_to IS NULL AND is_duplicate = 0 AND status = 'New'
-     ORDER BY created_at ASC`,
-  );
-  if (unassigned.length === 0) return { assigned: 0 };
-
-  await transaction(async () => {
-    for (let i = 0; i < unassigned.length; i++) {
-      const rep = reps[i % reps.length];
-      await run(
-        `UPDATE leads SET assigned_to = ?, assigned_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
-        [rep.id, unassigned[i].id],
-      );
-    }
-  });
-
-  // Notify each rep
-  const countByRep: Record<number, number> = {};
-  for (let i = 0; i < unassigned.length; i++) {
-    const rep = reps[i % reps.length];
-    countByRep[rep.id] = (countByRep[rep.id] ?? 0) + 1;
-  }
-  for (const rep of reps) {
-    const count = countByRep[rep.id];
-    if (count) {
-      await notify(rep.id, `${count} lead${count > 1 ? 's' : ''} assigned to you`, 'Your lead list has been updated.');
-    }
-  }
-
-  if (actorId && unassigned.length > 0) {
-    await recordAudit(actorId, 'lead.split', 'lead', null, `Auto-assigned ${unassigned.length} unassigned leads to ${reps.length} reps`);
-  }
-
-  return { assigned: unassigned.length };
-}
-
+// ===== ROUTE DEFINITIONS =====
 router.use(requireAuth);
 router.use(requireSuperAdmin);
 
+// New Lead Distribution summary & wizard data
+router.get(
+  '/summary',
+  asyncHandler(async (_req, res) => {
+    res.json(await getDistributionSummary());
+  }),
+);
+
+// New Lead Distribution execution
+router.post(
+  '/distribute',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const result = await executeLeadDistribution(req.body, user.id);
+    res.json(result);
+  }),
+);
+
+// Backward-compatible routes
 router.get(
   '/preview',
   asyncHandler(async (_req, res) => {
-    res.json(await splitSummary());
+    const s = await getDistributionSummary();
+    res.json({
+      reps: s.reps.map((r) => ({ id: r.id, name: r.name, load: 0 })),
+      pool: s.unassignedPool,
+      quota: 50,
+      enabled: true,
+    });
   }),
 );
 
 router.post(
   '/run',
   asyncHandler(async (req, res) => {
-    const body = z.object({ count: z.number().int().min(1).optional() }).parse(req.body ?? {});
     const user = req.user!;
-
-    if (!(await getSplitEnabled())) {
-      throw new AppError(409, 'Lead split is disabled in settings. Enable it first.', 'SPLIT_DISABLED');
-    }
-
-    const { reps } = await splitSummary();
-    if (reps.length === 0) {
-      throw new AppError(409, 'No active sales reps found.', 'NO_SALES_REPS');
-    }
-
-    const result = await runLeadSplitEngine(body.count, user.id);
-    res.json({ assigned: result.assigned, summary: await splitSummary() });
+    const result = await assignAllUnassignedLeads(user.id);
+    res.json({ assigned: result.assigned, summary: await getDistributionSummary() });
   }),
 );
 
-// Force-assign ALL unassigned leads — bypasses quota and enabled flag
 router.post(
   '/assign-all',
   asyncHandler(async (req, res) => {

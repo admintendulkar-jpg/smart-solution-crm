@@ -13,7 +13,8 @@ import { ClientsPage } from './features/clients/ClientsPage';
 import { ClientDetailPage } from './features/clients/ClientDetailPage';
 import { UsersPage } from './features/admin/UsersPage';
 import { ImportPage } from './features/admin/ImportPage';
-import { SplitSettingsPage } from './features/admin/SplitSettingsPage';
+import { LeadDistributionPage } from './features/admin/LeadDistributionPage';
+import { GeneralSettingsPage } from './features/admin/GeneralSettingsPage';
 import { AuditPage } from './features/admin/AuditPage';
 import { MyBoard } from './features/hr/MyBoard';
 import { MyLeave } from './features/hr/MyLeave';
@@ -75,7 +76,9 @@ export default function App() {
         <Route path="/export" element={<Shell><RequireRoles roles={['super_admin', 'admin']}><ExportPage /></RequireRoles></Shell>} />
         <Route path="/users" element={<Shell><RequireRoles roles={['super_admin', 'admin']}><UsersPage /></RequireRoles></Shell>} />
         <Route path="/import" element={<Shell><RequireRoles roles={['super_admin']}><ImportPage /></RequireRoles></Shell>} />
-        <Route path="/split" element={<Shell><RequireRoles roles={['super_admin']}><SplitSettingsPage /></RequireRoles></Shell>} />
+        <Route path="/distribution" element={<Shell><RequireRoles roles={['super_admin', 'admin']}><LeadDistributionPage /></RequireRoles></Shell>} />
+        <Route path="/split" element={<Navigate to="/distribution" replace />} />
+        <Route path="/settings" element={<Shell><RequireRoles roles={['super_admin']}><GeneralSettingsPage /></RequireRoles></Shell>} />
         <Route path="/audit" element={<Shell><RequireRoles roles={['super_admin']}><AuditPage /></RequireRoles></Shell>} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

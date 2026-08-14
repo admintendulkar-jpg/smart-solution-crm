@@ -108,6 +108,82 @@ function rangeFor(filter: string): { from?: string; to?: string } {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+interface MyProgressResponse {
+  todayTarget: number;
+  completedToday: number;
+  remainingToday: number;
+  batchTotal: number;
+  completedFromBatch: number;
+  remainingBatch: number;
+  estimatedCompletionDays: number;
+}
+
+function SalesProgressBanner() {
+  const { data: progress } = useQuery({
+    queryKey: ['myLeadProgress'],
+    queryFn: () => api.get<MyProgressResponse>('/leads/my-progress'),
+    refetchInterval: 15_000,
+  });
+
+  if (!progress) return null;
+
+  const targetPct = Math.min(100, Math.round((progress.completedToday / Math.max(1, progress.todayTarget)) * 100));
+  const batchPct = Math.min(100, Math.round((progress.completedFromBatch / Math.max(1, progress.batchTotal)) * 100));
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 14,
+        marginBottom: 20,
+      }}
+    >
+      <Card style={{ padding: 18, background: 'linear-gradient(135deg, #1B52D4 0%, #1440a8 100%)', color: '#fff' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#90b4ff', marginBottom: 4 }}>
+          Today's Target
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1 }}>
+          {progress.completedToday} <span style={{ fontSize: 15, fontWeight: 500, opacity: 0.85 }}>/ {progress.todayTarget} leads</span>
+        </div>
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${targetPct}%`, background: '#22A045', borderRadius: 3 }} />
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700 }}>{progress.remainingToday} remaining</span>
+        </div>
+      </Card>
+
+      <Card style={{ padding: 18 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 4 }}>
+          Assigned Batch Queue
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1 }}>
+          {progress.remainingBatch} <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-muted)' }}>/ {progress.batchTotal} batch leads</span>
+        </div>
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--color-grey-bg)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${batchPct}%`, background: 'var(--color-primary)', borderRadius: 3 }} />
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)' }}>{progress.completedFromBatch} completed</span>
+        </div>
+      </Card>
+
+      <Card style={{ padding: 18 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', marginBottom: 4 }}>
+          Estimated Completion
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--color-success-text)', lineHeight: 1.2 }}>
+          ~{progress.estimatedCompletionDays} working day{progress.estimatedCompletionDays !== 1 ? 's' : ''}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
+          Pace: {progress.todayTarget} leads / day
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export function LeadsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -212,6 +288,8 @@ export function LeadsPage() {
           <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search name, phone, email…" />
         }
       />
+
+      {isSales && <SalesProgressBanner />}
 
       <Card>
         <div style={{ padding: '0 18px', borderBottom: '1px solid var(--color-border)' }}>
