@@ -83,8 +83,9 @@ export const config = {
   brevoApiKey: process.env.BREVO_API_KEY ?? '',
 
   telephony: {
-    provider: ((process.env.TELEPHONY_PROVIDER || 'exotel').trim()) as 'exotel' | 'none',
-    mode: ((process.env.TELEPHONY_MODE || 'trial').trim()) as 'trial' | 'production',
+    provider: ((process.env.TELEPHONY_PROVIDER || 'callyzer').trim()) as 'callyzer' | 'exotel' | 'none',
+    mode: ((process.env.TELEPHONY_MODE || 'production').trim()) as 'trial' | 'production',
+    callyzerApiKey: (process.env.CALLYZER_API_KEY || '11e8caab-4623-4993-aac7-05d9e0b5b006').trim(),
     accountSid: (process.env.EXOTEL_ACCOUNT_SID || '').trim(),
     apiKey: (process.env.EXOTEL_API_KEY || '').trim(),
     apiToken: (process.env.EXOTEL_API_TOKEN || '').trim(),

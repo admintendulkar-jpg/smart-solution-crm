@@ -737,11 +737,14 @@ export function LeadDetailPage() {
   });
 
   const clickToCallMutation = useMutation({
-    mutationFn: () => api.post<{ message: string; callLogId: number }>('/telephony/call', { leadId }),
+    mutationFn: () => api.post<{ message: string; callLogId: number; telHref?: string }>('/telephony/call', { leadId }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.leadDetail(leadId) });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast.success(data.message || 'Call initiated. Exotel is connecting your phone...');
+      toast.success(data.message || 'Call initiated via Callyzer...');
+      if (data.telHref) {
+        window.location.href = data.telHref;
+      }
     },
     onError: (err) => toast.error(errorMessage(err)),
   });

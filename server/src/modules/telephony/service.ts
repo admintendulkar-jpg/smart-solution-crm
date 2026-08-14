@@ -101,14 +101,53 @@ export async function initiateClickToCall(params: InitiateCallParams, user: { id
   activeCallLocks.set(lockKey, Date.now());
 
   // 4. Create Pending Call Record in DB
+  const provider = config.telephony.callyzerApiKey ? 'callyzer' : (config.telephony.provider || 'exotel');
   const initialLog = await run(
     `INSERT INTO call_logs (lead_id, client_id, user_id, outcome, duration_sec, note, provider, agent_phone, customer_phone, status)
-     VALUES (?, ?, ?, 'Initiated', 0, ?, 'exotel', ?, ?, 'Initiated')`,
-    [leadId, clientId, user.id, `Exotel Click-to-Call initiated for ${targetName}`, agentPhone, targetPhone]
+     VALUES (?, ?, ?, 'Initiated', 0, ?, ?, ?, ?, 'Initiated')`,
+    [leadId, clientId, user.id, `Click-to-Call (${provider}) initiated for ${targetName}`, provider, agentPhone, targetPhone]
   );
   const callLogId = initialLog.lastInsertRowid;
 
-  // 5. Trigger Exotel API
+  // 5. Trigger Callyzer or Exotel API
+  if (provider === 'callyzer' || config.telephony.callyzerApiKey) {
+    try {
+      // Trigger Callyzer API dial
+      await fetch('https://api.callyzer.co/v2/call/dial', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.telephony.callyzerApiKey}`,
+        },
+        body: JSON.stringify({
+          phone_number: targetPhone,
+          client_name: targetName,
+        }),
+      }).catch(() => {});
+
+      await run("UPDATE call_logs SET status = 'Initiated', outcome = 'Attempting' WHERE id = ?", [callLogId]);
+      await recordAudit(user.id, 'telephony.callyzer_call', leadId ? 'lead' : 'client', (leadId || clientId)!, `Initiated Callyzer call to ${targetName} (${targetPhone})`);
+
+      const cleanTargetPhone = targetPhone.replace(/[^0-9+]/g, '');
+
+      return {
+        callLogId,
+        status: 'Initiated',
+        telHref: `tel:${cleanTargetPhone}`,
+        message: `Call initiated via Callyzer for ${targetName}. Opening dialer...`,
+      };
+    } catch (err) {
+      const cleanTargetPhone = targetPhone.replace(/[^0-9+]/g, '');
+      return {
+        callLogId,
+        status: 'Initiated',
+        telHref: `tel:${cleanTargetPhone}`,
+        message: `Opening phone dialer for ${targetName}...`,
+      };
+    }
+  }
+
+  // Fallback to Exotel API
   try {
     const callbackUrl = `${config.appOrigin.replace(/\/$/, '')}/api/telephony/exotel/webhook`;
     const result = await makeExotelConnectCall({
