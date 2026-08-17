@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Inbox, MessageCircle, Phone } from 'lucide-react';
+import { Inbox, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/auth/auth';
 import { api, errorMessage } from '@/lib/api';
 import { LEAD_PRIORITIES, LEAD_STATUSES, QUERY_KEYS } from '@/lib/constants';
@@ -79,12 +79,8 @@ function AgingCell({ lastCallAt }: { lastCallAt: string | null }) {
   );
 }
 
-function phoneHref(phone: string): string {
-  const digits = phone.replace(/[^0-9+]/g, '');
-  return digits ? `tel:${digits}` : '#';
-}
-
 function whatsappHref(phone: string): string {
+
   const digits = phone.replace(/[^0-9]/g, '');
   return digits ? `https://wa.me/91${digits.length === 10 ? digits : digits.slice(-10)}` : '#';
 }
@@ -397,7 +393,6 @@ export function LeadsPage() {
                     <Td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>{lead.phone}</span>
-                        <a href={phoneHref(lead.phone)} onClick={(e) => e.stopPropagation()} title="Call"><Phone size={13} style={{ color: 'var(--color-primary)' }} /></a>
                         <a href={whatsappHref(lead.phone)} onClick={(e) => e.stopPropagation()} title="WhatsApp" target="_blank" rel="noreferrer"><MessageCircle size={13} style={{ color: 'var(--color-success)' }} /></a>
                       </div>
                     </Td>

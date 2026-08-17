@@ -29,12 +29,8 @@ import { Card, CardHeader } from '@/ui/Card';
 import { Spinner } from '@/ui/Spinner';
 import { ErrorState } from '@/ui/ErrorState';
 import { useToast } from '@/ui/Toast';
-function phoneHref(phone: string): string {
-  const digits = phone.replace(/[^0-9+]/g, '');
-  return digits ? `tel:${digits}` : '#';
-}
-
 function whatsappHref(phone: string): string {
+
   const digits = phone.replace(/[^0-9]/g, '');
   return digits ? `https://wa.me/91${digits.length === 10 ? digits : digits.slice(-10)}` : '#';
 }
@@ -692,7 +688,6 @@ export function LeadDetailPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, fontSize: 13, color: 'var(--color-text-secondary)' }}>
               <span>{lead.phone}</span>
-              <a href={phoneHref(lead.phone)} title="Call"><Phone size={14} style={{ color: 'var(--color-primary)' }} /></a>
               <a href={whatsappHref(lead.phone)} title="WhatsApp" target="_blank" rel="noreferrer"><MessageCircle size={14} style={{ color: 'var(--color-success)' }} /></a>
               {lead.email && <span>· {lead.email}</span>}
             </div>
