@@ -919,7 +919,7 @@ router.get(
     }
 
     const page = Math.max(1, Number.parseInt(String(req.query.page ?? ''), 10) || 1);
-    const pageSize = Math.min(200, Math.max(1, Number.parseInt(String(req.query.pageSize ?? ''), 10) || 25));
+    const pageSize = Math.min(10000, Math.max(1, Number.parseInt(String(req.query.pageSize ?? ''), 10) || 25));
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const total = (await get<{ c: number }>(`SELECT COUNT(*) AS c FROM leads l ${where}`, params.slice(1)))?.c ?? 0;
